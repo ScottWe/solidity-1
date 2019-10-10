@@ -31,7 +31,8 @@ static jmp_buf Env;
 /*global variable exception_type 
  * record the return value of setjmp function,
  * which can label different exception types*/
-static int exception_type;
+enum ExceptionType {NONE, OUT_OF_DATA, REQUIRE_FAILED};
+static ExceptionType exception_type = NONE;
 
 /*set up the exploration with Env environment,
  * return the result of setjmp function*/
@@ -40,7 +41,7 @@ int SetupExploration (void);
 /*terminate the exploration with Env environment 
  * and different exception types, 
  * which can jump to setjmp with different results*/
-void TerminateExploration (int exception_type);
+void TerminateExploration (ExceptionType e);
 
 /*
  * assign the global array with Data array*/
@@ -82,10 +83,9 @@ void sol_require(sol_raw_uint8_t _cond, const char* _msg)
 void ll_assume(sol_raw_uint8_t _cond){
     if(!_cond){
 
-	/*exception_type 2: 
+	/*exception_type REQUIRE_FAILED: 
 	 * the ll_assume is failure*/
-	exception_type = 2;
-	TerminateExploration(exception_type);	
+	TerminateExploration(REQUIRE_FAILED);	
     }
 }
 
@@ -109,8 +109,9 @@ int SetupExploration (void){
 /*terminate the exploration with Env environment 
  * and different exception types, 
  * which can jump to setjmp with different results*/
-void TerminateExploration (int exception_type){
-	longjmp(Env, exception_type);
+void TerminateExploration (ExceptionType e){
+	exception_type = e;
+	longjmp(Env, e);
 }
 
 /*
@@ -119,10 +120,9 @@ void whether_RunOut(void)
 {
 	if (CounterOfRandData >= SizeOfRandData)
 	{
-		/*exception_type 1: 
+		/*exception_type OUT_OF_DATA: 
 		 * run out of RandData*/
-		exception_type = 1;
-		TerminateExploration(exception_type);
+		TerminateExploration(OUT_OF_DATA);
 	}
 }
 
@@ -154,15 +154,15 @@ void ran(const uint8_t *Data, size_t Size)
 }
 
 int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
-	exception_type = 0;
+	exception_type = NONE;
 	switch(SetupExploration())
 	{
 		case 1:
-			/*exception_type 1: 
+			/*exception_type OUT_OF_DATA: 
 			 * run out of RandData*/
 			break;
 		case 2:
-			/*exception_type 2: 
+			/*exception_type REQUIRE_FAILED: 
 			 * the require statement is failure*/
 			break;
 		case 0:
