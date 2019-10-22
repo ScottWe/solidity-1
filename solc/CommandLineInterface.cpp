@@ -1253,10 +1253,13 @@ void CommandLineInterface::handleCModel()
 		copyDirectory((m_install_dir / "share/solc/project").string(), "", true);
 		copyDirectory((m_install_dir / "include/solc/libverify").string(), "libverify", true);
 		
-		stringstream cmodel_cpp_data, cmodel_h_data, primitive_data;
+		stringstream cmodel_cpp_data, cmodel_h_data, primitive_data, harness_data;
+		handleCModelHarness(harness_data);
 		handleCModelHeaders(asts, converter, cmodel_h_data);
 		handleCModelBody(asts, converter, cmodel_cpp_data);
 		handleCModelPrimitives(asts, primitive_data);
+		createFile("harness.c", harness_data.str());
+		createFile("harness.cpp", harness_data.str());
 		createFile("primitive.h", primitive_data.str());
 		createFile("cmodel.h", cmodel_h_data.str());
 		createFile("cmodel.c", cmodel_cpp_data.str());
@@ -1264,7 +1267,9 @@ void CommandLineInterface::handleCModel()
 	}
 	else
 	{
-		sout() << "====== primitive.h =====" << endl;
+		sout() << "======= harness.c(pp) =======" << endl;
+		handleCModelHarness(sout());
+		sout() << endl << endl << "====== primitive.h =====" << endl;
 		handleCModelPrimitives(asts, sout());
 		sout() << endl << endl << "======= cmodel.h =======" << endl;
 		handleCModelHeaders(asts, converter, sout());
@@ -1272,6 +1277,16 @@ void CommandLineInterface::handleCModel()
 		handleCModelBody(asts, converter, sout());
 		sout() << endl;
 	}
+}
+
+void CommandLineInterface::handleCModelHarness(ostream& _os)
+{
+	_os << "#include \"cmodel.h\"" << endl
+	    << "int main(int argc,const char**argv){"
+	    << "sol_setup(argc,argv);"
+		<< "run_model();"
+		<< "return 0;"
+		<< "}";
 }
 
 void CommandLineInterface::handleCModelPrimitives(
@@ -1307,6 +1322,7 @@ void CommandLineInterface::handleCModelHeaders(
 	using dev::solidity::modelcheck::CallState;
 	_os << "#pragma once" << endl;
 	_os << "#include \"primitive.h\"" << endl;
+	_os << "void run_model(void);";
 	for (auto const& ast : _asts)
 	{
 		// TODO(scottwe): This isn't going to work. It will print multiple
@@ -1364,11 +1380,6 @@ void CommandLineInterface::handleCModelBody(
 		MainFunctionGenerator cov(*ast, _con);
 		cov.print(_os);
 	}
-	_os << "int main(int argc,const char**argv){"
-	    << "sol_setup(argc,argv);"
-		<< "run_model();"
-		<< "return 0;"
-		<< "}";
 }
 
 bool CommandLineInterface::actOnInput()
