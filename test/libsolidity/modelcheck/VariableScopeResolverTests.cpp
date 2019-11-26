@@ -3,7 +3,7 @@
  * Targets libsolidity/modelcheck/VariableScopeResolver.{cpp,h}.
  */
 
-#include <libsolidity/modelcheck/VariableScopeResolver.h>
+#include <libsolidity/modelcheck/analysis/VariableScope.h>
 
 #include <boost/test/unit_test.hpp>
 #include <test/libsolidity/AnalysisFramework.h>
@@ -34,7 +34,7 @@ BOOST_AUTO_TEST_CASE(member_variables_no_scope)
     VariableScopeResolver resolver;
 
     Identifier id(langutil::SourceLocation(), make_shared<string>("var"));
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id), "self->d_var");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id), "self->user_var");
 }
 
 // Tests that a scope may be created, and that a declaration, `a`, may be
@@ -58,8 +58,8 @@ BOOST_AUTO_TEST_CASE(member_variables_scoped)
 
     Identifier id1(langutil::SourceLocation(), make_shared<string>("var"));
     Identifier id2(langutil::SourceLocation(), make_shared<string>("a"));
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id1), "self->d_var");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id2), "a");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id1), "self->user_var");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id2), "func_user_a");
 }
 
 // Attempts to produce three scopes, one declaring `a`, one declaring `b`, and
@@ -87,46 +87,44 @@ BOOST_AUTO_TEST_CASE(local_variables_scoped)
     Identifier id_b(langutil::SourceLocation(), make_shared<string>("b"));
     Identifier id_c(langutil::SourceLocation(), make_shared<string>("c"));
 
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "self->d_a");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "self->d_b");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "self->d_c");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "self->user_a");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "self->user_b");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "self->user_c");
 
     resolver.enter();
     resolver.record_declaration(decl_a);
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "a");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "self->d_b");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "self->d_c");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "func_user_a");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "self->user_b");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "self->user_c");
 
     resolver.enter();
     resolver.record_declaration(decl_b);
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "a");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "b");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "self->d_c");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "func_user_a");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "func_user_b");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "self->user_c");
 
     resolver.enter();
     resolver.record_declaration(decl_c);
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "a");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "b");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "c");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "func_user_a");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "func_user_b");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "func_user_c");
 
     resolver.exit();
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "a");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "b");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "self->d_c");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "func_user_a");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "func_user_b");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "self->user_c");
 
     resolver.exit();
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "a");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "self->d_b");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "self->d_c");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "func_user_a");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "self->user_b");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "self->user_c");
 
     resolver.exit();
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "self->d_a");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "self->d_b");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "self->d_c");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_a), "self->user_a");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_b), "self->user_b");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id_c), "self->user_c");
 }
 
-// A single scope is set up, with a single declaration. The resolutions of
-// verious special-case keywords are validated.
 BOOST_AUTO_TEST_CASE(state_resolution)
 {
     char const* text = R"(
@@ -148,11 +146,59 @@ BOOST_AUTO_TEST_CASE(state_resolution)
     Identifier blk(langutil::SourceLocation(), make_shared<string>("block"));
     Identifier ths(langutil::SourceLocation(), make_shared<string>("this"));
     Identifier now(langutil::SourceLocation(), make_shared<string>("now"));
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(txn), "state");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(msg), "state");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(blk), "state");
     BOOST_CHECK_EQUAL(resolver.resolve_identifier(ths), "self");
-    BOOST_CHECK_EQUAL(resolver.resolve_identifier(now), "state->blocknum");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(now), "blocknum");
+}
+
+BOOST_AUTO_TEST_CASE(variable_name_rewriting)
+{
+    string orig = "a_b__c";
+    BOOST_CHECK_EQUAL(
+        VariableScopeResolver::rewrite(orig, true, VarContext::STRUCT),
+        "model_a__b____c"
+    );
+    BOOST_CHECK_EQUAL(
+        VariableScopeResolver::rewrite(orig, false, VarContext::STRUCT),
+        "user_a__b____c"
+    );
+    BOOST_CHECK_EQUAL(
+        VariableScopeResolver::rewrite(orig, true, VarContext::FUNCTION),
+        "func_model_a__b____c"
+    );
+    BOOST_CHECK_EQUAL(
+        VariableScopeResolver::rewrite(orig, false, VarContext::FUNCTION),
+        "func_user_a__b____c"
+    );
+}
+
+BOOST_AUTO_TEST_CASE(nameless_decl)
+{
+    VariableScopeResolver resolver;
+
+    Identifier id(langutil::SourceLocation(), make_shared<string>(""));
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id), "");
+}
+
+BOOST_AUTO_TEST_CASE(shadow_scope)
+{
+    char const* text = R"(
+		contract A {
+            int a;
+		}
+	)";
+
+    auto const &unit = *parseAndAnalyse(text);
+    auto const &ctrt = *retrieveContractByName(unit, "A");
+    auto const &decl = *ctrt.stateVariables()[0];
+
+    VariableScopeResolver resolver(true);
+    resolver.enter();
+    resolver.record_declaration(decl);
+
+    Identifier id1(langutil::SourceLocation(), make_shared<string>("var"));
+    Identifier id2(langutil::SourceLocation(), make_shared<string>("a"));
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id1), "self->model_var");
+    BOOST_CHECK_EQUAL(resolver.resolve_identifier(id2), "func_model_a");
 }
 
 BOOST_AUTO_TEST_SUITE_END();

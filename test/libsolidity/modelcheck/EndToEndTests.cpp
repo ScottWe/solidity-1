@@ -6,8 +6,8 @@
  * These are tests which apply to both ADTConverter and FunctionConverter.
  */
 
-#include <libsolidity/modelcheck/ADTConverter.h>
-#include <libsolidity/modelcheck/FunctionConverter.h>
+#include <libsolidity/modelcheck/translation/ADT.h>
+#include <libsolidity/modelcheck/translation/Function.h>
 
 #include <test/libsolidity/AnalysisFramework.h>
 #include <boost/test/unit_test.hpp>
@@ -42,14 +42,17 @@ BOOST_AUTO_TEST_CASE(simple_contract)
     TypeConverter converter;
     converter.record(ast);
 
+    CallState statedata;
+    statedata.record(ast);
+
     ostringstream adt_actual, func_actual;
-    ADTConverter(ast, converter, true).print(adt_actual);
+    ADTConverter(ast, converter, 1, true).print(adt_actual);
     FunctionConverter(
-        ast, converter, FunctionConverter::View::FULL, true
+        ast, statedata, converter, 1, FunctionConverter::View::FULL, true
     ).print(func_actual);
 
     BOOST_CHECK_EQUAL(adt_actual.str(), "struct A;");
-    BOOST_CHECK_EQUAL(func_actual.str(), "struct A Init_A(void);");
+    BOOST_CHECK_EQUAL(func_actual.str(), "void Init_A(struct A*self,sol_address_t sender,sol_uint256_t value,sol_uint256_t blocknum,sol_bool_t paid);");
 }
 
 // Ensures that the non-recursive map case generates the correct structure and
@@ -67,24 +70,27 @@ BOOST_AUTO_TEST_CASE(simple_map)
     TypeConverter converter;
     converter.record(ast);
 
+    CallState statedata;
+    statedata.record(ast);
+
     ostringstream adt_actual, func_actual;
-    ADTConverter(ast, converter, true).print(adt_actual);
+    ADTConverter(ast, converter, 1, true).print(adt_actual);
     FunctionConverter(
-        ast, converter, FunctionConverter::View::FULL, true
+        ast, statedata, converter, 1, FunctionConverter::View::FULL, true
     ).print(func_actual);
 
     ostringstream adt_expect, func_expect;
     adt_expect << "struct A_Mapa_submap1;" << "struct A;";
-    func_expect << "struct A Init_A(void);";
+    func_expect << "void Init_A(struct A*self,sol_address_t sender,sol_uint256_t value,sol_uint256_t blocknum,sol_bool_t paid);";
     func_expect << "struct A_Mapa_submap1 Init_0_A_Mapa_submap1(void);";
     func_expect << "struct A_Mapa_submap1 ND_A_Mapa_submap1(void);";
     func_expect << "sol_uint256_t Read_A_Mapa_submap1"
-                << "(struct A_Mapa_submap1*a,sol_uint256_t idx);";
+                << "(struct A_Mapa_submap1*arr,sol_uint256_t key);";
     func_expect << "void Write_A_Mapa_submap1"
-                << "(struct A_Mapa_submap1*a,sol_uint256_t idx"
-                << ",sol_uint256_t d);";
+                << "(struct A_Mapa_submap1*arr,sol_uint256_t key"
+                << ",sol_uint256_t dat);";
     func_expect << "sol_uint256_t*Ref_A_Mapa_submap1"
-                << "(struct A_Mapa_submap1*a,sol_uint256_t idx);";
+                << "(struct A_Mapa_submap1*arr,sol_uint256_t key);";
 
     BOOST_CHECK_EQUAL(adt_actual.str(), adt_expect.str());
     BOOST_CHECK_EQUAL(func_actual.str(), func_expect.str());
@@ -110,18 +116,21 @@ BOOST_AUTO_TEST_CASE(simple_struct)
     TypeConverter converter;
     converter.record(ast);
 
+    CallState statedata;
+    statedata.record(ast);
+
     ostringstream adt_actual, func_actual;
-    ADTConverter(ast, converter, true).print(adt_actual);
+    ADTConverter(ast, converter, 1, true).print(adt_actual);
     FunctionConverter(
-        ast, converter, FunctionConverter::View::FULL, true
+        ast, statedata, converter, 1, FunctionConverter::View::FULL, true
     ).print(func_actual);
 
     ostringstream adt_expect, func_expect;
     adt_expect << "struct A_StructB;" << "struct A;";
-    func_expect << "struct A Init_A(void);";
+    func_expect << "void Init_A(struct A*self,sol_address_t sender,sol_uint256_t value,sol_uint256_t blocknum,sol_bool_t paid);";
     func_expect << "struct A_StructB Init_0_A_StructB(void);";
     func_expect << "struct A_StructB Init_A_StructB"
-                << "(sol_uint256_t a,sol_uint256_t b);";
+                << "(sol_uint256_t user_a,sol_uint256_t user_b);";
     func_expect << "struct A_StructB ND_A_StructB(void);";
 
     BOOST_CHECK_EQUAL(adt_actual.str(), adt_expect.str());
@@ -145,52 +154,20 @@ BOOST_AUTO_TEST_CASE(simple_func)
     TypeConverter converter;
     converter.record(ast);
 
+    CallState statedata;
+    statedata.record(ast);
+
     ostringstream adt_actual, func_actual;
-    ADTConverter(ast, converter, true).print(adt_actual);
+    ADTConverter(ast, converter, 1, true).print(adt_actual);
     FunctionConverter(
-        ast, converter, FunctionConverter::View::FULL, true
+        ast, statedata, converter, 1, FunctionConverter::View::FULL, true
     ).print(func_actual);
 
     ostringstream func_expect;
     func_expect << "struct A Init_A(void);";
     func_expect << "sol_uint256_t Method_A_FuncsimpleFunc"
-                << "(struct A*self,struct CallState*state,sol_uint256_t _in);";
-
-    BOOST_CHECK_EQUAL(adt_actual.str(), "struct A;");
-    BOOST_CHECK_EQUAL(func_actual.str(), func_expect.str());
-}
-
-// Ensures that when functions are pure (as opposed to just views), that said
-// function will take no state variables
-BOOST_AUTO_TEST_CASE(pure_func)
-{
-    char const* text = R"(
-        contract A {
-            function simpleFuncA() public pure returns (uint _out) {
-                _out = 4;
-            }
-            function simpleFuncB() public view returns (uint _out) {
-                _out = 4;
-            }
-        }
-    )";
-
-    auto const &ast = *parseAndAnalyse(text);
-
-    TypeConverter converter;
-    converter.record(ast);
-
-    ostringstream adt_actual, func_actual;
-    ADTConverter(ast, converter, true).print(adt_actual);
-    FunctionConverter(
-        ast, converter, FunctionConverter::View::FULL, true
-    ).print(func_actual);
-
-    ostringstream func_expect;
-    func_expect << "struct A Init_A(void);";
-    func_expect << "sol_uint256_t Method_A_FuncsimpleFuncA(void);";
-    func_expect << "sol_uint256_t Method_A_FuncsimpleFuncB"
-                << "(struct A*self,struct CallState*state);";
+                << "(struct A*self,sol_uint256_t blocknum,sol_address_t sender,"
+                << "sol_uint256_t value,sol_uint256_t func_user___in);";
 
     BOOST_CHECK_EQUAL(adt_actual.str(), "struct A;");
     BOOST_CHECK_EQUAL(func_actual.str(), func_expect.str());
@@ -215,16 +192,20 @@ BOOST_AUTO_TEST_CASE(simple_void_func)
     TypeConverter converter;
     converter.record(ast);
 
+    CallState statedata;
+    statedata.record(ast);
+
     ostringstream adt_actual, func_actual;
-    ADTConverter(ast, converter, true).print(adt_actual);
+    ADTConverter(ast, converter, 1, true).print(adt_actual);
     FunctionConverter(
-        ast, converter, FunctionConverter::View::FULL, true
+        ast, statedata, converter, 1, FunctionConverter::View::FULL, true
     ).print(func_actual);
 
     ostringstream func_expect;
     func_expect << "struct A Init_A(void);";
     func_expect << "void Method_A_FuncsimpleFunc"
-                << "(struct A*self,struct CallState*state,sol_uint256_t _in);";
+                << "(struct A*self,sol_uint256_t blocknum,sol_address_t sender,"
+                << "sol_uint256_t value,sol_uint256_t func_user___in);";
 
     BOOST_CHECK_EQUAL(adt_actual.str(), "struct A;");
     BOOST_CHECK_EQUAL(func_actual.str(), func_expect.str());
@@ -249,10 +230,13 @@ BOOST_AUTO_TEST_CASE(struct_nesting)
     TypeConverter converter;
     converter.record(ast);
 
+    CallState statedata;
+    statedata.record(ast);
+
     ostringstream adt_actual, func_actual;
-    ADTConverter(ast, converter, true).print(adt_actual);
+    ADTConverter(ast, converter, 1, true).print(adt_actual);
     FunctionConverter(
-        ast, converter, FunctionConverter::View::FULL, true
+        ast, statedata, converter, 1, FunctionConverter::View::FULL, true
     ).print(func_actual);
 
     ostringstream adt_expect, func_expect;
@@ -260,7 +244,7 @@ BOOST_AUTO_TEST_CASE(struct_nesting)
     adt_expect << "struct A_StructB_Mapa_submap1;";
     adt_expect << "struct A_StructB;";
     adt_expect << "struct A;";
-    func_expect << "struct A Init_A(void);";
+    func_expect << "void Init_A(struct A*self,sol_address_t sender,sol_uint256_t value,sol_uint256_t blocknum,sol_bool_t paid);";
     func_expect << "struct A_StructB Init_0_A_StructB(void);";
     func_expect << "struct A_StructB Init_A_StructB(void);";
     func_expect << "struct A_StructB ND_A_StructB(void);";
@@ -269,23 +253,23 @@ BOOST_AUTO_TEST_CASE(struct_nesting)
     func_expect << "struct A_StructB_Mapa_submap1 "
                 << "ND_A_StructB_Mapa_submap1(void);";
     func_expect << "struct A_StructB_Mapa_submap2 Read_A_StructB_Mapa_submap1"
-                << "(struct A_StructB_Mapa_submap1*a,sol_uint256_t idx);";
+                << "(struct A_StructB_Mapa_submap1*arr,sol_uint256_t key);";
     func_expect << "void Write_A_StructB_Mapa_submap1"
-                << "(struct A_StructB_Mapa_submap1*a,sol_uint256_t idx"
-                << ",struct A_StructB_Mapa_submap2 d);";
+                << "(struct A_StructB_Mapa_submap1*arr,sol_uint256_t key"
+                << ",struct A_StructB_Mapa_submap2 dat);";
     func_expect << "struct A_StructB_Mapa_submap2*Ref_A_StructB_Mapa_submap1"
-                << "(struct A_StructB_Mapa_submap1*a,sol_uint256_t idx);";
+                << "(struct A_StructB_Mapa_submap1*arr,sol_uint256_t key);";
     func_expect << "struct A_StructB_Mapa_submap2 Init_0_A_StructB_Mapa_submap2"
                 << "(void);";
     func_expect << "struct A_StructB_Mapa_submap2 ND_A_StructB_Mapa_submap2"
                 << "(void);";
     func_expect << "sol_uint256_t Read_A_StructB_Mapa_submap2"
-                << "(struct A_StructB_Mapa_submap2*a,sol_uint256_t idx);";
+                << "(struct A_StructB_Mapa_submap2*arr,sol_uint256_t key);";
     func_expect << "void Write_A_StructB_Mapa_submap2"
-                << "(struct A_StructB_Mapa_submap2*a,sol_uint256_t idx"
-                << ",sol_uint256_t d);";
+                << "(struct A_StructB_Mapa_submap2*arr,sol_uint256_t key"
+                << ",sol_uint256_t dat);";
     func_expect << "sol_uint256_t*Ref_A_StructB_Mapa_submap2"
-                << "(struct A_StructB_Mapa_submap2*a,sol_uint256_t idx);";
+                << "(struct A_StructB_Mapa_submap2*arr,sol_uint256_t key);";
 
     BOOST_CHECK_EQUAL(adt_actual.str(), adt_expect.str());
     BOOST_CHECK_EQUAL(func_actual.str(), func_expect.str());
@@ -314,10 +298,13 @@ BOOST_AUTO_TEST_CASE(multiple_contracts)
     TypeConverter converter;
     converter.record(ast);
 
+    CallState statedata;
+    statedata.record(ast);
+
     ostringstream adt_actual, func_actual;
-    ADTConverter(ast, converter, true).print(adt_actual);
+    ADTConverter(ast, converter, 1, true).print(adt_actual);
     FunctionConverter(
-        ast, converter, FunctionConverter::View::FULL, true
+        ast, statedata, converter, 1, FunctionConverter::View::FULL, true
     ).print(func_actual);
 
     ostringstream adt_expect, func_expect;
@@ -326,7 +313,7 @@ BOOST_AUTO_TEST_CASE(multiple_contracts)
     adt_expect << "struct A;";
     adt_expect << "struct C_Mapb_submap1;";
     adt_expect << "struct C;";
-    func_expect << "struct A Init_A(void);";
+    func_expect << "void Init_A(struct A*self,sol_address_t sender,sol_uint256_t value,sol_uint256_t blocknum,sol_bool_t paid);";
     func_expect << "struct A_StructB Init_0_A_StructB(void);";
     func_expect << "struct A_StructB Init_A_StructB(void);";
     func_expect << "struct A_StructB ND_A_StructB(void);";
@@ -335,22 +322,22 @@ BOOST_AUTO_TEST_CASE(multiple_contracts)
     func_expect << "struct A_StructB_Mapa_submap1 ND_A_StructB_Mapa_submap1"
                 << "(void);";
     func_expect << "sol_uint256_t Read_A_StructB_Mapa_submap1"
-                << "(struct A_StructB_Mapa_submap1*a,sol_uint256_t idx);";
+                << "(struct A_StructB_Mapa_submap1*arr,sol_uint256_t key);";
     func_expect << "void Write_A_StructB_Mapa_submap1"
-                << "(struct A_StructB_Mapa_submap1*a,sol_uint256_t idx"
-                << ",sol_uint256_t d);";
+                << "(struct A_StructB_Mapa_submap1*arr,sol_uint256_t key"
+                << ",sol_uint256_t dat);";
     func_expect << "sol_uint256_t*Ref_A_StructB_Mapa_submap1"
-                << "(struct A_StructB_Mapa_submap1*a,sol_uint256_t idx);";
-    func_expect << "struct C Init_C(void);";
+                << "(struct A_StructB_Mapa_submap1*arr,sol_uint256_t key);";
+    func_expect << "void Init_C(struct A*self,sol_address_t sender,sol_uint256_t value,sol_uint256_t blocknum,sol_bool_t paid);";
     func_expect << "struct C_Mapb_submap1 Init_0_C_Mapb_submap1(void);";
     func_expect << "struct C_Mapb_submap1 ND_C_Mapb_submap1(void);";
     func_expect << "sol_uint256_t Read_C_Mapb_submap1"
-                << "(struct C_Mapb_submap1*a,sol_uint256_t idx);";
+                << "(struct C_Mapb_submap1*arr,sol_uint256_t key);";
     func_expect << "void Write_C_Mapb_submap1"
-                << "(struct C_Mapb_submap1*a,sol_uint256_t idx"
-                << ",sol_uint256_t d);";
+                << "(struct C_Mapb_submap1*arr,sol_uint256_t key"
+                << ",sol_uint256_t dat);";
     func_expect << "sol_uint256_t*Ref_C_Mapb_submap1"
-                << "(struct C_Mapb_submap1*a,sol_uint256_t idx);";
+                << "(struct C_Mapb_submap1*arr,sol_uint256_t key);";
 
     BOOST_CHECK_EQUAL(adt_actual.str(), adt_expect.str());
     BOOST_CHECK_EQUAL(func_actual.str(), func_expect.str());
@@ -372,10 +359,13 @@ BOOST_AUTO_TEST_CASE(nested_maps)
     TypeConverter converter;
     converter.record(ast);
 
+    CallState statedata;
+    statedata.record(ast);
+
     ostringstream adt_actual, func_actual;
-    ADTConverter(ast, converter, true).print(adt_actual);
+    ADTConverter(ast, converter, 1, true).print(adt_actual);
     FunctionConverter(
-        ast, converter, FunctionConverter::View::FULL, true
+        ast, statedata, converter, 1, FunctionConverter::View::FULL, true
     ).print(func_actual);
 
     ostringstream adt_expect, func_expect;
@@ -383,32 +373,32 @@ BOOST_AUTO_TEST_CASE(nested_maps)
     adt_expect << "struct A_Mapa_submap2;";
     adt_expect << "struct A_Mapa_submap1;";
     adt_expect << "struct A;";
-    func_expect << "struct A Init_A(void);";
+    func_expect << "void Init_A(struct A*self,sol_address_t sender,sol_uint256_t value,sol_uint256_t blocknum,sol_bool_t paid);";
     func_expect << "struct A_Mapa_submap1 Init_0_A_Mapa_submap1(void);";
     func_expect << "struct A_Mapa_submap1 ND_A_Mapa_submap1(void);";
     func_expect << "struct A_Mapa_submap2 Read_A_Mapa_submap1"
-                << "(struct A_Mapa_submap1*a,sol_uint256_t idx);";
-    func_expect << "void Write_A_Mapa_submap1(struct A_Mapa_submap1*a"
-                << ",sol_uint256_t idx,struct A_Mapa_submap2 d);";
+                << "(struct A_Mapa_submap1*arr,sol_uint256_t key);";
+    func_expect << "void Write_A_Mapa_submap1(struct A_Mapa_submap1*arr"
+                << ",sol_uint256_t key,struct A_Mapa_submap2 dat);";
     func_expect << "struct A_Mapa_submap2*Ref_A_Mapa_submap1"
-                << "(struct A_Mapa_submap1*a,sol_uint256_t idx);";
+                << "(struct A_Mapa_submap1*arr,sol_uint256_t key);";
     func_expect << "struct A_Mapa_submap2 Init_0_A_Mapa_submap2(void);";
     func_expect << "struct A_Mapa_submap2 ND_A_Mapa_submap2(void);";
     func_expect << "struct A_Mapa_submap3 Read_A_Mapa_submap2"
-                << "(struct A_Mapa_submap2*a,sol_uint256_t idx);";
-    func_expect << "void Write_A_Mapa_submap2(struct A_Mapa_submap2*a"
-                << ",sol_uint256_t idx,struct A_Mapa_submap3 d);";
+                << "(struct A_Mapa_submap2*arr,sol_uint256_t key);";
+    func_expect << "void Write_A_Mapa_submap2(struct A_Mapa_submap2*arr"
+                << ",sol_uint256_t key,struct A_Mapa_submap3 dat);";
     func_expect << "struct A_Mapa_submap3*Ref_A_Mapa_submap2"
-                << "(struct A_Mapa_submap2*a,sol_uint256_t idx);";
+                << "(struct A_Mapa_submap2*arr,sol_uint256_t key);";
     func_expect << "struct A_Mapa_submap3 Init_0_A_Mapa_submap3(void);";
     func_expect << "struct A_Mapa_submap3 ND_A_Mapa_submap3(void);";
     func_expect << "sol_uint256_t Read_A_Mapa_submap3"
-                << "(struct A_Mapa_submap3*a,sol_uint256_t idx);";
+                << "(struct A_Mapa_submap3*arr,sol_uint256_t key);";
     func_expect << "void Write_A_Mapa_submap3"
-                << "(struct A_Mapa_submap3*a,sol_uint256_t idx"
-                << ",sol_uint256_t d);";
+                << "(struct A_Mapa_submap3*arr,sol_uint256_t key"
+                << ",sol_uint256_t dat);";
     func_expect << "sol_uint256_t*Ref_A_Mapa_submap3"
-                << "(struct A_Mapa_submap3*a,sol_uint256_t idx);";
+                << "(struct A_Mapa_submap3*arr,sol_uint256_t key);";
 
     BOOST_CHECK_EQUAL(adt_actual.str(), adt_expect.str());
     BOOST_CHECK_EQUAL(func_actual.str(), func_expect.str());
@@ -436,20 +426,24 @@ BOOST_AUTO_TEST_CASE(nontrivial_retval)
     TypeConverter converter;
     converter.record(ast);
 
+    CallState statedata;
+    statedata.record(ast);
+
     ostringstream adt_actual, func_actual;
-    ADTConverter(ast, converter, true).print(adt_actual);
+    ADTConverter(ast, converter, 1, true).print(adt_actual);
     FunctionConverter(
-        ast, converter, FunctionConverter::View::FULL, true
+        ast, statedata, converter, 1, FunctionConverter::View::FULL, true
     ).print(func_actual);
 
     ostringstream adt_expect, func_expect;
     adt_expect << "struct A_StructB;" << "struct A;";
     func_expect << "struct A Init_A(void);";
     func_expect << "struct A_StructB Init_0_A_StructB(void);";
-    func_expect << "struct A_StructB Init_A_StructB(sol_uint256_t a);";
+    func_expect << "struct A_StructB Init_A_StructB(sol_uint256_t user_a);";
     func_expect << "struct A_StructB ND_A_StructB(void);";
     func_expect << "struct A_StructB Method_A_FuncadvFunc"
-                << "(struct A*self,struct CallState*state,sol_uint256_t _in);";
+                << "(struct A*self,sol_uint256_t blocknum,sol_address_t sender,"
+                << "sol_uint256_t value,sol_uint256_t func_user___in);";
 
     BOOST_CHECK_EQUAL(adt_actual.str(), adt_expect.str());
     BOOST_CHECK_EQUAL(func_actual.str(), func_expect.str());
@@ -494,14 +488,17 @@ BOOST_AUTO_TEST_CASE(reproducible)
     TypeConverter converter;
     converter.record(ast);
 
+    CallState statedata;
+    statedata.record(ast);
+
     ostringstream adt_1, adt_2, func_1, func_2;
-    ADTConverter(ast, converter, false).print(adt_1);
-    ADTConverter(ast, converter, false).print(adt_2);
+    ADTConverter(ast, converter, 1, false).print(adt_1);
+    ADTConverter(ast, converter, 1, false).print(adt_2);
     FunctionConverter(
-        ast, converter, FunctionConverter::View::FULL, false
+        ast, statedata, converter, 1, FunctionConverter::View::FULL, false
     ).print(func_1);
     FunctionConverter(
-        ast, converter, FunctionConverter::View::FULL, false
+        ast, statedata, converter, 1, FunctionConverter::View::FULL, false
     ).print(func_2);
 
     BOOST_CHECK_EQUAL(adt_1.str(), adt_2.str());

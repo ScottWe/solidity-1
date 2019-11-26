@@ -3,7 +3,7 @@
  * Specific tests for libsolidity/modelcheck/SimpleCGenerator.cpp
  */
 
-#include <libsolidity/modelcheck/SimpleCGenerator.h>
+#include <libsolidity/modelcheck/codegen/Details.h>
 
 #include <test/libsolidity/AnalysisFramework.h>
 #include <boost/test/unit_test.hpp>
@@ -74,6 +74,31 @@ BOOST_AUTO_TEST_CASE(switch_with_default)
     CBlockList body{make_shared<CReturn>(make_shared<CIntLiteral>(5))};
     CSwitch switch_stmt(make_shared<CIdentifier>("cond", false), move(body));
     test_switch_case(switch_stmt, "return 5;");
+}
+
+// Tests the various variable declarations.
+BOOST_AUTO_TEST_CASE(var_decl_types)
+{
+    CVarDecl basic1("type", "name");
+    CVarDecl basic2("type", "name", false);
+    CVarDecl ptr("type", "name", true);
+    CVarDecl set_val("type", "name", false, make_shared<CIntLiteral>(42));
+
+    ostringstream basic1_actual;
+    basic1_actual << basic1;
+    BOOST_CHECK_EQUAL(basic1_actual.str(), "type name;");
+
+    ostringstream basic2_actual;
+    basic2_actual << basic2;
+    BOOST_CHECK_EQUAL(basic2_actual.str(), "type name;");
+
+    ostringstream ptr_actual;
+    ptr_actual << ptr;
+    BOOST_CHECK_EQUAL(ptr_actual.str(), "type*name;");
+
+    ostringstream set_val_actual;
+    set_val_actual << set_val;
+    BOOST_CHECK_EQUAL(set_val_actual.str(), "type name=42;");
 }
 
 BOOST_AUTO_TEST_SUITE_END();

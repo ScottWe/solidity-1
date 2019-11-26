@@ -3,7 +3,7 @@
  * Targets libsolidity/modelcheck/TypeTranslator.{h,cpp}.
  */
 
-#include <libsolidity/modelcheck/TypeTranslator.h>
+#include <libsolidity/modelcheck/analysis/Types.h>
 
 #include <boost/test/unit_test.hpp>
 #include <test/libsolidity/AnalysisFramework.h>
@@ -72,6 +72,7 @@ BOOST_AUTO_TEST_CASE(simple_types)
 {
     char const* text = R"(
         contract A {
+            enum MyEnum { A, B, C }
             bool a;
             address b;
             int32 c;
@@ -82,6 +83,7 @@ BOOST_AUTO_TEST_CASE(simple_types)
             fixed40x11 h;
             ufixed32x10 i;
             ufixed40x11 j;
+            MyEnum k;
         }
     )";
 
@@ -89,7 +91,8 @@ BOOST_AUTO_TEST_CASE(simple_types)
         {"a", "sol_bool_t"}, {"b", "sol_address_t"}, {"c", "sol_int32_t"},
         {"d", "sol_int40_t"}, {"e", "sol_uint32_t"}, {"f", "sol_uint40_t"},
         {"g", "sol_fixed32X10_t"}, {"h", "sol_fixed40X11_t"},
-        {"i", "sol_ufixed32X10_t"}, {"j", "sol_ufixed40X11_t"}
+        {"i", "sol_ufixed32X10_t"}, {"j", "sol_ufixed40X11_t"},
+        {"k", "sol_uint8_t"}
     };
 
     auto const& ast = *parseAndAnalyse(text);
@@ -509,6 +512,64 @@ BOOST_AUTO_TEST_CASE(function_and_identifier_oreder_regression)
     converter.record(ast);
 
     BOOST_CHECK_EQUAL(converter.get_name(indx), "Method_A_Funcg");
+}
+
+BOOST_AUTO_TEST_CASE(modifier_names)
+{
+    char const* text = R"(
+        contract A {
+            modifier m1() { _; }
+            modifier m2() { _; }
+            modifier m3() { _; }
+            function f() public m1() m2() m3() pure { }
+        }
+    )";
+
+    auto const& ast = *parseAndAnalyse(text);
+    auto const& ctrt = *retrieveContractByName(ast, "A");
+    auto const& func = *ctrt.definedFunctions()[0];
+
+    TypeConverter converter;
+    converter.record(ast);
+
+    BOOST_CHECK_NE(func.modifiers().size(), 0);
+    for (unsigned int i = 0; i < func.modifiers().size(); ++i)
+    {
+        BOOST_CHECK_EQUAL(
+            converter.get_name(func) + "_mod" + std::to_string(i),
+            converter.get_name(*func.modifiers()[i])
+        );
+        BOOST_CHECK_EQUAL(
+            converter.get_type(func),
+            converter.get_type(*func.modifiers()[i])
+        );
+    }
+}
+
+BOOST_AUTO_TEST_CASE(modifier_types)
+{
+    char const* text = R"(
+        contract A {
+            modifier m1() { _; }
+            modifier m2(int a) { _; }
+            modifier m3(int a, int b) { _; }
+        }
+    )";
+
+    auto const& ast = *parseAndAnalyse(text);
+    auto const& ctrt = *retrieveContractByName(ast, "A");
+
+    TypeConverter converter;
+    converter.record(ast);
+
+    BOOST_CHECK_NE(ctrt.functionModifiers().size(), 0);
+    for (auto modifier : ctrt.functionModifiers())
+    {
+        for (auto param : modifier->parameters())
+        {
+            BOOST_CHECK_NO_THROW(converter.get_type(*param));
+        }
+    }
 }
 
 // Ensures names are escaped, as per the translation specifications.

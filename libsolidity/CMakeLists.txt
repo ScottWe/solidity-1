@@ -106,30 +106,47 @@ set(sources
 	interface/StandardCompiler.h
 	interface/Version.cpp
 	interface/Version.h
-	modelcheck/ADTConverter.cpp
-	modelcheck/ADTConverter.h
-	modelcheck/BlockConverter.cpp
-	modelcheck/BlockConverter.h
-	modelcheck/CallState.cpp
-	modelcheck/CallState.h
-	modelcheck/ExpressionConverter.cpp
-	modelcheck/ExpressionConverter.h
-	modelcheck/FunctionConverter.cpp
-	modelcheck/FunctionConverter.h
-	modelcheck/MainFunctionGenerator.cpp
-	modelcheck/MainFunctionGenerator.h
-	modelcheck/PrimitiveTypeGenerator.cpp
-	modelcheck/PrimitiveTypeGenerator.h
-	modelcheck/SimpleCCore.cpp
-	modelcheck/SimpleCCore.h
-	modelcheck/SimpleCGenerator.cpp
-	modelcheck/SimpleCGenerator.h
-	modelcheck/TypeClassification.cpp
-	modelcheck/TypeClassification.h
-	modelcheck/TypeTranslator.cpp
-	modelcheck/TypeTranslator.h
-	modelcheck/VariableScopeResolver.cpp
-	modelcheck/VariableScopeResolver.h
+	modelcheck/analysis/AllocationSites.cpp
+	modelcheck/analysis/AllocationSites.h
+	modelcheck/analysis/CallState.cpp
+	modelcheck/analysis/CallState.h
+	modelcheck/analysis/FunctionCall.cpp
+	modelcheck/analysis/FunctionCall.h
+	modelcheck/analysis/Primitives.cpp
+	modelcheck/analysis/Primitives.h
+	modelcheck/analysis/Types.cpp
+	modelcheck/analysis/Types.h
+	modelcheck/analysis/VariableScope.cpp
+	modelcheck/analysis/VariableScope.h
+	modelcheck/codegen/Core.cpp
+	modelcheck/codegen/Core.h
+	modelcheck/codegen/Details.cpp
+	modelcheck/codegen/Details.h
+	modelcheck/codegen/Literals.cpp
+	modelcheck/codegen/Literals.h
+	modelcheck/translation/ADT.cpp
+	modelcheck/translation/ADT.h
+	modelcheck/translation/Block.h
+	modelcheck/translation/Expression.cpp
+	modelcheck/translation/Expression.h
+	modelcheck/translation/Mapping.h
+	modelcheck/translation/Mapping.cpp
+	modelcheck/translation/Function.cpp
+	modelcheck/translation/Function.h
+	modelcheck/translation/FunctionBlock.cpp
+	modelcheck/translation/GeneralBlock.cpp
+	modelcheck/translation/MainFunction.cpp
+	modelcheck/translation/MainFunction.h
+	modelcheck/translation/ModifierBlock.cpp
+	modelcheck/utils/AST.h
+	modelcheck/utils/CallState.cpp
+	modelcheck/utils/CallState.h
+	modelcheck/utils/Contract.cpp
+	modelcheck/utils/Contract.h
+	modelcheck/utils/Function.cpp
+	modelcheck/utils/Function.h
+	modelcheck/utils/Types.cpp
+	modelcheck/utils/Types.h
 	parsing/DocStringParser.cpp
 	parsing/DocStringParser.h
 	parsing/Parser.cpp

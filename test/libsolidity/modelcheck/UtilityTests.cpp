@@ -6,9 +6,10 @@
  * Targets libsolidity/modelcheck/Utility.h.
  */
 
-#include <libsolidity/modelcheck/Utility.h>
+#include <libsolidity/modelcheck/utils/General.h>
 
 #include <boost/test/unit_test.hpp>
+#include <cstdint>
 
 using namespace std;
 
@@ -44,21 +45,23 @@ BOOST_AUTO_TEST_CASE(scope_swap)
     BOOST_CHECK_EQUAL(my_var, 1);
 }
 
-BOOST_AUTO_TEST_CASE(is_pow_of_2)
+BOOST_AUTO_TEST_CASE(tickets)
 {
-    short next_pow = 1;
-    for (char i = -127; i < 127; ++i)
+    uint8_t i = 0;
+    TicketSystem<uint8_t> tickets;
+    while (true)
     {
-        if (i == next_pow)
-        {
-            BOOST_CHECK_EQUAL(is_power_of_two<char>(i), true);
-            next_pow *= 2;
-        }
-        else
-        {
-            BOOST_CHECK_EQUAL(is_power_of_two<char>(i), false);
-        }
+        uint8_t next = i;
+        ++i;
+
+        if (i == 0) break;
+
+        BOOST_CHECK_EQUAL(tickets.next(), next);
     }
+
+    bool overflow_caught = false;
+    try { tickets.next(); } catch(...) { overflow_caught = true; }
+    BOOST_CHECK(overflow_caught);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

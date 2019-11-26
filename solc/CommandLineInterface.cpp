@@ -40,11 +40,12 @@
 #include <libsolidity/interface/CompilerStack.h>
 #include <libsolidity/interface/StandardCompiler.h>
 #include <libsolidity/interface/GasEstimator.h>
-#include <libsolidity/modelcheck/ADTConverter.h>
-#include <libsolidity/modelcheck/CallState.h>
-#include <libsolidity/modelcheck/FunctionConverter.h>
-#include <libsolidity/modelcheck/MainFunctionGenerator.h>
-#include <libsolidity/modelcheck/PrimitiveTypeGenerator.h>
+#include <libsolidity/modelcheck/analysis/AllocationSites.h>
+#include <libsolidity/modelcheck/codegen/Details.h>
+#include <libsolidity/modelcheck/translation/ADT.h>
+#include <libsolidity/modelcheck/translation/Function.h>
+#include <libsolidity/modelcheck/translation/MainFunction.h>
+#include <libsolidity/modelcheck/translation/Mapping.h>
 
 #include <libyul/AssemblyStack.h>
 
@@ -122,6 +123,8 @@ static string const g_strAstCompactJson = "ast-compact-json";
 static string const g_strBinary = "bin";
 static string const g_strBinaryRuntime = "bin-runtime";
 static string const g_strCModel = "c-model";
+static string const g_strModelMapLen = "map-k";
+static string const g_strModelActor = "contract-list";
 static string const g_strCombinedJson = "combined-json";
 static string const g_strCompactJSON = "compact-format";
 static string const g_strContracts = "contracts";
@@ -175,6 +178,8 @@ static string const g_argAstJson = g_strAstJson;
 static string const g_argBinary = g_strBinary;
 static string const g_argBinaryRuntime = g_strBinaryRuntime;
 static string const g_argCModel = g_strCModel;
+static string const g_argModelMapLen = g_strModelMapLen;
+static string const g_argModelActor = g_strModelActor;
 static string const g_argCombinedJson = g_strCombinedJson;
 static string const g_argCompactJSON = g_strCompactJSON;
 static string const g_argGas = g_strGas;
@@ -767,7 +772,17 @@ Allowed options)",
 		(g_argColor.c_str(), "Force colored output.")
 		(g_argNoColor.c_str(), "Explicitly disable colored output, disabling terminal auto-detection.")
 		(g_argNewReporter.c_str(), "Enables new diagnostics reporter.")
-		(g_argIgnoreMissingFiles.c_str(), "Ignore missing files.");
+		(g_argIgnoreMissingFiles.c_str(), "Ignore missing files.")
+		(
+			g_argModelMapLen.c_str(),
+			po::value<size_t>()->value_name("k")->default_value(1),
+			"When modeling maps for the intent of model-checking, k entries will be represented."
+		)
+		(
+			g_argModelActor.c_str(),
+			po::value<vector<string>>()->multitoken(),
+			"A list of contracts to instantiate in the model."
+		);
 	po::options_description outputComponents("Output Components");
 	outputComponents.add_options()
 		(g_argAst.c_str(), "AST of all source files.")
@@ -1235,13 +1250,49 @@ void CommandLineInterface::handleAst(string const& _argStr)
 
 void CommandLineInterface::handleCModel()
 {
+	// Generates an AST for each Solidity source unit.
 	vector<SourceUnit const*> asts;
-	modelcheck::TypeConverter converter;
 	for (auto const& sourceCode: m_sourceCodes)
 	{
 		SourceUnit const& ast = m_compiler->ast(sourceCode.first);
-		converter.record(ast);
 		asts.push_back(&ast);
+	}
+
+	// A first pass over the Solidity sources to aggregate type data.
+	modelcheck::CallState callstate;
+	modelcheck::TypeConverter converter;
+	modelcheck::PrimitiveTypeGenerator primitive_set;
+	modelcheck::NewCallGraph newcall_graph;
+	for (auto const* ast: asts)
+	{
+		callstate.record(*ast);
+		converter.record(*ast);
+		primitive_set.record(*ast);
+		newcall_graph.record(*ast);
+	}
+	callstate.register_primitives(primitive_set);
+	newcall_graph.finalize();
+
+	// Checks for violations in the NewCallGraph.
+	if (!newcall_graph.violations().empty())
+	{
+		// TODO: report violations.
+		m_error = true;
+		serr() << "Disallowed allocation detected in AST." << endl;
+		return;
+	}
+
+	// Constructs a list of requested contracts.
+	size_t actor_count = 0;
+	list<ContractDefinition const*> major_actors;
+	if (!m_args[g_argModelActor].empty())
+	{
+		for (auto actor_name : m_args[g_argModelActor].as<vector<string>>())
+		{
+			auto const* actor = newcall_graph.reverse_name(actor_name);
+			major_actors.push_back(actor);
+			actor_count += newcall_graph.cost_of(actor);
+		}
 	}
 
 	// TODO(scottwe): This was quick to set up, but it leads to the same AST
@@ -1255,26 +1306,26 @@ void CommandLineInterface::handleCModel()
 		
 		stringstream cmodel_cpp_data, cmodel_h_data, primitive_data, harness_data;
 		handleCModelHarness(harness_data);
-		handleCModelHeaders(asts, converter, cmodel_h_data);
-		handleCModelBody(asts, converter, cmodel_cpp_data);
-		handleCModelPrimitives(asts, primitive_data);
-		createFile("harness.c", harness_data.str());
-		createFile("harness.cpp", harness_data.str());
+		handleCModelHeaders(asts, converter, callstate, cmodel_h_data);
+		handleCModelBody(asts, major_actors, newcall_graph, converter, callstate, cmodel_cpp_data);
+		handleCModelPrimitives(primitive_set, primitive_data);
 		createFile("primitive.h", primitive_data.str());
 		createFile("cmodel.h", cmodel_h_data.str());
 		createFile("cmodel.c", cmodel_cpp_data.str());
 		createFile("cmodel.cpp", cmodel_cpp_data.str());
+		createFile("harness.c", harness_data.str());
+		createFile("harness.cpp", harness_data.str());
 	}
 	else
 	{
 		sout() << "======= harness.c(pp) =======" << endl;
 		handleCModelHarness(sout());
-		sout() << endl << endl << "====== primitive.h =====" << endl;
-		handleCModelPrimitives(asts, sout());
+		sout() << "====== primitive.h =====" << endl;
+		handleCModelPrimitives(primitive_set, sout());
 		sout() << endl << endl << "======= cmodel.h =======" << endl;
-		handleCModelHeaders(asts, converter, sout());
+		handleCModelHeaders(asts, converter, callstate, sout());
 		sout() << endl << endl << "======= cmodel.c(pp) =======" << endl;
-		handleCModelBody(asts, converter, sout());
+		handleCModelBody(asts, major_actors, newcall_graph, converter, callstate, sout());
 		sout() << endl;
 	}
 }
@@ -1290,96 +1341,89 @@ void CommandLineInterface::handleCModelHarness(ostream& _os)
 }
 
 void CommandLineInterface::handleCModelPrimitives(
-	vector<SourceUnit const*> const& _asts, ostream& _os
+	modelcheck::PrimitiveTypeGenerator _gen, ostream& _os
 )
 {
-	using dev::solidity::modelcheck::PrimitiveTypeGenerator;
-	using dev::solidity::modelcheck::CallState;
-
-	PrimitiveTypeGenerator gen;
-	for (auto const& ast : _asts)
-	{
-		// TODO(scottwe): This isn't going to work. It will print multiple
-		//                CallStates.
-		gen.record(*ast);
-		CallState(*ast, false).register_primitives(gen);
-	}
-
-	_os << "#pragma once" << endl;
-	_os << "#include \"libverify/verify.h\"" << endl;
-	gen.print(_os);
+	_os << "#pragma once" << endl
+	    << "#include \"libverify/verify.h\"" << endl;
+	_gen.print(_os);
 }
 
 
 void CommandLineInterface::handleCModelHeaders(
 	vector<SourceUnit const*> const& _asts,
 	modelcheck::TypeConverter const& _con,
+	modelcheck::CallState const& _cs,
 	ostream& _os
 )
 {
 	using dev::solidity::modelcheck::ADTConverter;
 	using dev::solidity::modelcheck::FunctionConverter;
-	using dev::solidity::modelcheck::CallState;
-	_os << "#pragma once" << endl;
-	_os << "#include \"primitive.h\"" << endl;
+	size_t map_k = m_args[g_argModelMapLen].as<size_t>();
+	_os << "#pragma once" << endl
+	    << "#include \"primitive.h\"" << endl;
 	_os << "void run_model(void);";
-	for (auto const& ast : _asts)
+	_cs.print(_os, true);
+	for (auto const* ast : _asts)
 	{
-		// TODO(scottwe): This isn't going to work. It will print multiple
-		//                CallStates.
-		CallState cov(*ast, true);
+		ADTConverter cov(*ast, _con, map_k, true);
 		cov.print(_os);
 	}
-	for (auto const& ast : _asts)
+	for (auto const* ast : _asts)
 	{
-		ADTConverter cov(*ast, _con, true);
-		cov.print(_os);
-	}
-	for (auto const& ast : _asts)
-	{
-		FunctionConverter cov(*ast, _con, FunctionConverter::View::EXT, true);
+		FunctionConverter cov(
+			*ast, _cs, _con, map_k, FunctionConverter::View::EXT, true
+		);
 		cov.print(_os);
 	}
 }
 
 void CommandLineInterface::handleCModelBody(
 	vector<SourceUnit const*> const& _asts,
+	std::list<ContractDefinition const*> const& _model,
+	modelcheck::NewCallGraph const& _graph,
 	modelcheck::TypeConverter const& _con,
+	modelcheck::CallState const& _cs,
 	ostream& _os
 )
 {
 	using dev::solidity::modelcheck::ADTConverter;
 	using dev::solidity::modelcheck::FunctionConverter;
-	using dev::solidity::modelcheck::CallState;
 	using dev::solidity::modelcheck::MainFunctionGenerator;
+	size_t map_k = m_args[g_argModelMapLen].as<size_t>();
 	_os << "#include \"cmodel.h\"" << endl;
-	for (auto const& ast : _asts)
+	for (size_t i = 0; i < map_k; ++i)
 	{
-		// TODO(scottwe): This isn't going to work. It will print multiple
-		//                CallStates.
-		CallState cov(*ast, false);
+		auto const NAME = modelcheck::MapGenerator::name_global_key(i);
+        _os << modelcheck::CVarDecl("sol_raw_uint160_t", NAME);
+	}
+	_cs.print(_os, false);
+	for (auto const* ast : _asts)
+	{
+		ADTConverter cov(*ast, _con, map_k, false);
 		cov.print(_os);
 	}
-	for (auto const& ast : _asts)
+	for (auto const* ast : _asts)
 	{
-		ADTConverter cov(*ast, _con, false);
+		FunctionConverter cov(
+			*ast, _cs, _con, map_k, FunctionConverter::View::INT, true
+		);
 		cov.print(_os);
 	}
-	for (auto const& ast : _asts)
+	for (auto const* ast : _asts)
 	{
-		FunctionConverter cov(*ast, _con, FunctionConverter::View::INT, true);
+		FunctionConverter cov(
+			*ast, _cs, _con, map_k, FunctionConverter::View::FULL, false
+		);
 		cov.print(_os);
 	}
-	for (auto const& ast : _asts)
+
+	modelcheck::MainFunctionGenerator main_gen(map_k, _model, _graph, _cs, _con);
+	for (auto const* ast : _asts)
 	{
-		FunctionConverter cov(*ast, _con, FunctionConverter::View::FULL, false);
-		cov.print(_os);
+		main_gen.record(*ast);
 	}
-	for (auto const& ast : _asts)
-	{
-		MainFunctionGenerator cov(*ast, _con);
-		cov.print(_os);
-	}
+	main_gen.print(_os);
 }
 
 bool CommandLineInterface::actOnInput()

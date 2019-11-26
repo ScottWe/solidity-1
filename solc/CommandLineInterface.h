@@ -22,7 +22,11 @@
 #pragma once
 
 #include <libsolidity/interface/CompilerStack.h>
-#include <libsolidity/modelcheck/TypeTranslator.h>
+#include <libsolidity/modelcheck/analysis/CallState.h>
+#include <libsolidity/modelcheck/analysis/AllocationSites.h>
+#include <libsolidity/modelcheck/analysis/Primitives.h>
+#include <libsolidity/modelcheck/analysis/Types.h>
+
 #include <libyul/AssemblyStack.h>
 #include <liblangutil/EVMVersion.h>
 
@@ -67,16 +71,20 @@ private:
 	void handleCModel();
 	void handleCModelHarness(std::ostream& _os);
 	void handleCModelPrimitives(
-		std::vector<SourceUnit const*> const& _asts, std::ostream& _os
+		modelcheck::PrimitiveTypeGenerator _gen, std::ostream& _os
 	);
 	void handleCModelHeaders(
 		std::vector<SourceUnit const*> const& _asts,
 		modelcheck::TypeConverter const& _con,
+		modelcheck::CallState const& _cs,
 		std::ostream& _os
 	);
 	void handleCModelBody(
 		std::vector<SourceUnit const*> const& _asts,
+		std::list<ContractDefinition const*> const& _model,
+		modelcheck::NewCallGraph const& _graph,
 		modelcheck::TypeConverter const& _con,
+		modelcheck::CallState const& _cs,
 		std::ostream & _os
 	);
 	void handleBinary(std::string const& _contract);
