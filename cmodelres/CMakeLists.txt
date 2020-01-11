@@ -42,6 +42,31 @@ else()
     message(WARNING "Failed to find sea. See -DSEA_PATH.")
 endif()
 
+# Locates KLEE, as required for testing.
+set(
+	KLEE_PATH
+	""
+	CACHE STRING
+	"A path to the KLEE executable, klee."
+)
+
+if(KLEE_PATH)
+    find_program(
+	    KLEE_EXE
+	    NAMES klee
+        PATHS ${KLEE_PATH}
+        NO_DEFAULT_PATH
+    )
+else()
+    find_program(KLEE_EXE NAMES klee)
+endif()
+
+if(KLEE_EXE)
+    message(STATUS "klee found: ${KLEE_EXE}")
+else()
+    message(WARNING "Failed to find klee. See -DKLEE_PATH.")
+endif()
+
 # Locates clang-format, if possible.
 find_program(
     CLANG_FORMAT_EXE
@@ -129,3 +154,15 @@ if(SEA_EXE)
         COMMAND_EXPAND_LISTS
     )
 endif()
+
+
+# target for KLEE
+set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -"flto")
+include_directories("/home/klee/klee_src/include")
+
+# generate IR bitcode
+add_executable(kcmodel ${EXE_SRCS_COMMON} ${EXE_SRCS_C} libverify/verify_klee.c)
+
+# link library
+# ln -s /home/klee/klee_build/lib/libkleeRuntest.so /usr/lib
+target_link_libraries(kcmodel libkleeRuntest.so)
