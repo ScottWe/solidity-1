@@ -155,14 +155,27 @@ if(SEA_EXE)
     )
 endif()
 
+set(CMAKE_C_COMPILER clang)
+set(LLVM_LINK llvm-link)
+set(KLEE_DRIVER_BC "klee_driver.bc")
+set(KLEE_SRC "/home/klee/klee_src/include")
 
 # target for KLEE
-set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} -"flto")
-include_directories("/home/klee/klee_src/include")
+if(KLEE_EXE)
+    add_custom_target(
+            klee_driver
+        COMMAND ${CMAKE_C_COMPILER} -I ${KLEE_SRC} -D MC_USE_STDINT -emit-llvm -c -g -O0 -Xclang -disable-O0-optnone ${CMAKE_CURRENT_SOURCE_DIR}/cmodel.c ${CMAKE_CURRENT_SOURCE_DIR}/libverify/verify_klee.c
+        COMMAND ${LLVM_LINK} -f cmodel.bc verify_klee.bc -o ${KLEE_DRIVER_BC}
+            COMMAND_EXPAND_LISTS
+        )
 
-# generate IR bitcode
-add_executable(kcmodel ${EXE_SRCS_COMMON} ${EXE_SRCS_C} libverify/verify_klee.c)
+    set(KLEE_ARGS "--simplify-sym-indices;--write-cvcs;--write-cov;--output-module;--max-memory=1000;--disable-inlining;--optimize;--use-forked-solver;--use-cex-cache;--libc=uclibc;--posix-runtime;--external-calls=all;--only-output-states-covering-new;--max-sym-array-size=4096;--max-instruction-time=30s;--max-time=60min;--watchdog;--max-memory-inhibit=false;--max-static-fork-pct=1;--max-static-solve-pct=1;--max-static-cpfork-pct=1;--switch-type=internal;--search=random-path;--search=nurs:covnew;--use-batching-search;--batch-instructions=10000;--silent-klee-assume;--max-forks=512")
 
-# link library
-# ln -s /home/klee/klee_build/lib/libkleeRuntest.so /usr/lib
-target_link_libraries(kcmodel libkleeRuntest.so)
+    add_custom_target(
+        symbex
+	COMMAND ${KLEE_EXE} ${KLEE_ARGS} ${KLEE_DRIVER_BC}
+        COMMAND_EXPAND_LISTS
+    )
+
+    add_dependencies(symbex klee_driver)
+endif()
