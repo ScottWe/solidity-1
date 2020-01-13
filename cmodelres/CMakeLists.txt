@@ -167,6 +167,7 @@ set(KLEE_DEPS "")
     endforeach(fn)
 
 # target for klee_driver
+if(KLEE_PATH)
 add_custom_target(
         klee_driver
     COMMAND ${CMAKE_C_COMPILER} -I ${KLEE_SRC} -D MC_USE_STDINT -emit-llvm -c -g -O0 -Xclang -disable-O0-optnone ${KLEE_DEPS}
@@ -184,4 +185,5 @@ if(KLEE_EXE)
     )
 
     add_dependencies(symbex klee_driver)
+endif()
 endif()
