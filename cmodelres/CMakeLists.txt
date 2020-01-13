@@ -159,22 +159,28 @@ set(CMAKE_C_COMPILER clang)
 set(LLVM_LINK llvm-link)
 set(KLEE_DRIVER_BC "klee_driver.bc")
 set(KLEE_SRC "/home/klee/klee_src/include")
+set(KLEE_ARGS "--simplify-sym-indices;--write-cvcs;--write-cov;--output-module;--max-memory=1000;--disable-inlining;--optimize;--use-forked-solver;--use-cex-cache;--libc=uclibc;--posix-runtime;--external-calls=all;--only-output-states-covering-new;--max-sym-array-size=4096;--max-instruction-time=30s;--max-time=60min;--watchdog;--max-memory-inhibit=false;--max-static-fork-pct=1;--max-static-solve-pct=1;--max-static-cpfork-pct=1;--switch-type=internal;--search=random-path;--search=nurs:covnew;--use-batching-search;--batch-instructions=10000;--silent-klee-assume;--max-forks=512")
+set(KLEE_DEPS "")
+    list(APPEND KLEE_DEPS "${CMAKE_CURRENT_SOURCE_DIR}/libverify/verify_klee.c")
+    foreach(fn ${EXE_SRCS_C})
+        list(APPEND KLEE_DEPS "${CMAKE_CURRENT_SOURCE_DIR}/${fn}")
+    endforeach(fn)
 
-# target for KLEE
+# target for klee_driver
+add_custom_target(
+        klee_driver
+    COMMAND ${CMAKE_C_COMPILER} -I ${KLEE_SRC} -D MC_USE_STDINT -emit-llvm -c -g -O0 -Xclang -disable-O0-optnone ${KLEE_DEPS}
+    COMMAND ${LLVM_LINK} -f cmodel.bc verify_klee.bc -o ${KLEE_DRIVER_BC}
+    COMMAND_EXPAND_LISTS
+    SOURCES ${KLEE_DEPS}
+    )
+
+# target for klee
 if(KLEE_EXE)
     add_custom_target(
-            klee_driver
-        COMMAND ${CMAKE_C_COMPILER} -I ${KLEE_SRC} -D MC_USE_STDINT -emit-llvm -c -g -O0 -Xclang -disable-O0-optnone ${CMAKE_CURRENT_SOURCE_DIR}/cmodel.c ${CMAKE_CURRENT_SOURCE_DIR}/libverify/verify_klee.c
-        COMMAND ${LLVM_LINK} -f cmodel.bc verify_klee.bc -o ${KLEE_DRIVER_BC}
-            COMMAND_EXPAND_LISTS
-        )
-
-    set(KLEE_ARGS "--simplify-sym-indices;--write-cvcs;--write-cov;--output-module;--max-memory=1000;--disable-inlining;--optimize;--use-forked-solver;--use-cex-cache;--libc=uclibc;--posix-runtime;--external-calls=all;--only-output-states-covering-new;--max-sym-array-size=4096;--max-instruction-time=30s;--max-time=60min;--watchdog;--max-memory-inhibit=false;--max-static-fork-pct=1;--max-static-solve-pct=1;--max-static-cpfork-pct=1;--switch-type=internal;--search=random-path;--search=nurs:covnew;--use-batching-search;--batch-instructions=10000;--silent-klee-assume;--max-forks=512")
-
-    add_custom_target(
         symbex
-	COMMAND ${KLEE_EXE} ${KLEE_ARGS} ${KLEE_DRIVER_BC}
-        COMMAND_EXPAND_LISTS
+    COMMAND ${KLEE_EXE} ${KLEE_ARGS} ${KLEE_DRIVER_BC}
+    COMMAND_EXPAND_LISTS
     )
 
     add_dependencies(symbex klee_driver)
