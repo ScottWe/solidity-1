@@ -465,6 +465,135 @@ BOOST_AUTO_TEST_CASE(annotation_tests)
     BOOST_CHECK_NE(test6.context(), nullptr);
 }
 
+BOOST_AUTO_TEST_CASE(upcast_at_callsite_test)
+{
+    char const* text = R"(
+        contract X {}
+        contract Y is X {}
+        contract Test {
+            X x1;
+            X x2;
+            Y y;
+            constructor() public {
+                x1 = new X();
+                x2 = new Y();
+                y = new Y();
+            }
+        }
+    )";
+
+    const auto& unit = *parseAndAnalyse(text);
+    auto const* ctrt = retrieveContractByName(unit, "Test");
+
+    NewCallGraph callgraph;
+    callgraph.record(unit);
+
+    for (auto var : ctrt->stateVariables())
+    {
+        if (var->name() == "x1")
+        {
+            auto const& derv = callgraph.specialize(*var);
+            BOOST_CHECK_EQUAL(derv.name(), "X");
+        }
+        else if (var->name() == "x2")
+        {
+            auto const& derv = callgraph.specialize(*var);
+            BOOST_CHECK_EQUAL(derv.name(), "Y");
+        }
+        else if (var->name() == "y")
+        {
+            auto const& derv = callgraph.specialize(*var);
+            BOOST_CHECK_EQUAL(derv.name(), "Y");
+        }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(indirect_internal_assignment)
+{
+    char const* text = R"(
+        contract X {}
+        contract Test1 {
+            function good_internal() internal returns (X) {
+                return new X();
+            }
+        }
+        contract Test2 {
+            X x;
+            function bad_internal() internal returns (X) {
+                x = new X();
+                return new X();
+            }
+        }
+        contract Test3 {
+            X x;
+            function good_internal() internal returns (X) {
+                return new X();
+            }
+            constructor() public {
+                x = good_internal();
+            }
+        }
+        contract Test4 {
+            X x;
+            function good_internal() internal returns (X) {
+                return new X();
+            }
+            function bad_func() public {
+                x = good_internal();
+            }
+        }
+    )";
+
+    const auto& unit = *parseAndAnalyse(text);
+
+    auto const* test1 = retrieveContractByName(unit, "Test1");
+    NewCallSummary summary1(*test1);
+    BOOST_CHECK(summary1.violations().empty());
+
+    auto const* test2 = retrieveContractByName(unit, "Test2");
+    NewCallSummary summary2(*test2);
+    BOOST_CHECK(!summary2.violations().empty());
+
+    auto const* test3 = retrieveContractByName(unit, "Test3");
+    NewCallSummary summary3(*test3);
+    BOOST_CHECK(summary3.violations().empty());
+
+    auto const* test4 = retrieveContractByName(unit, "Test4");
+    NewCallSummary summary4(*test4);
+    BOOST_CHECK(!summary4.violations().empty());
+}
+
+BOOST_AUTO_TEST_CASE(specialization_by_inderection)
+{
+    char const* text = R"(
+        contract X {}
+        contract Y is X {}
+        contract Test {
+            X c1;
+            constructor() public {
+                c1 = f();
+                c2 = g();
+            }
+            function f() internal returns (X) {
+                return new Y();
+            }
+            function g() internal returns (X) {
+                return new X();
+            }
+        }
+    )";
+
+    const auto& unit = *parseAndAnalyse(text);
+
+    NewCallGraph g;
+    g.record(unit);
+    g.finalize();
+
+    auto const* ctrt = retrieveContractByName(unit, "Test");
+    BOOST_CHECK_EQUAL(g.specialize(*ctrt->stateVariables()[0]).name(), "Y");
+    BOOST_CHECK_EQUAL(g.specialize(*ctrt->stateVariables()[1]).name(), "X");
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 // -------------------------------------------------------------------------- //

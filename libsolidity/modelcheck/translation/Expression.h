@@ -7,6 +7,8 @@
 
 #include <libsolidity/ast/ASTVisitor.h>
 #include <libsolidity/modelcheck/analysis/CallState.h>
+#include <libsolidity/modelcheck/analysis/FunctionCall.h>
+#include <libsolidity/modelcheck/analysis/Mapping.h>
 #include <libsolidity/modelcheck/analysis/Types.h>
 #include <libsolidity/modelcheck/analysis/VariableScope.h>
 #include <libsolidity/modelcheck/codegen/Core.h>
@@ -82,8 +84,8 @@ private:
 	);
 	void generate_mapping_call(
 		std::string const& _op,
-		std::string const& _id,
-		IndexAccess const& _map,
+		MapDeflate::FlatMap const& _map,
+		FlatIndex const& _idx,
 		CExprPtr _v
 	);
 
@@ -91,12 +93,15 @@ private:
 	void print_struct_ctor(FunctionCall const& _call);
 	void print_cast(FunctionCall const& _call);
 	void print_function(FunctionCall const& _call);
-	void print_method(FunctionType const& _type, FunctionCall const& _call);
+	void print_method(FunctionCallAnalyzer const& _calldata);
 	void print_contract_ctor(FunctionCall const& _call);
-	void print_payment(FunctionCall const& _call);
+	void print_payment(FunctionCall const& _call, bool _nothrow);
 	void print_assertion(std::string _type, SolArgList const& _args);
+	void print_revert(SolArgList const&);
 	void pass_next_call_state(
-		FunctionCall const& _call, CFuncCallBuilder & _builder, bool _is_ext
+		FunctionCallAnalyzer const& _call,
+		CFuncCallBuilder & _builder,
+		bool _is_ext
 	);
 
 	// Helpe functions to handle certain member access cases.

@@ -166,15 +166,11 @@ BOOST_AUTO_TEST_CASE(map_variable)
     auto const& ctrt = *retrieveContractByName(ast, "A");
 
     const auto& map_var = *ctrt.stateVariables()[0];
-    const auto& submap1 = *dynamic_cast<Mapping const*>(map_var.typeName());
-    const auto& submap2 = *dynamic_cast<Mapping const*>(&submap1.valueType());
 
     TypeConverter converter;
     converter.record(ast);
 
-    BOOST_CHECK_EQUAL(converter.get_name(map_var), "A_Maparr_submap1");
-    BOOST_CHECK_EQUAL(converter.get_name(submap1), "A_Maparr_submap1");
-    BOOST_CHECK_EQUAL(converter.get_name(submap2), "A_Maparr_submap2");
+    BOOST_CHECK_EQUAL(converter.get_name(map_var), "Map_1");
 }
 
 // Tests that function names and return values are annotated properly. This
@@ -197,35 +193,11 @@ BOOST_AUTO_TEST_CASE(function)
 
     auto const& f1 = (funs[0]->name() == "f") ? *funs[0] : *funs[1];
     BOOST_CHECK(converter.has_record(f1));
-    BOOST_CHECK_EQUAL(converter.get_name(f1), "Method_A_Funcf");
     BOOST_CHECK_EQUAL(converter.get_type(f1), "sol_int256_t");
 
     auto const& f2 = (funs[0]->name() != "f") ? *funs[0] : *funs[1];
     BOOST_CHECK(converter.has_record(f2));
-    BOOST_CHECK_EQUAL(converter.get_name(f2), "Method_A_Funcg");
     BOOST_CHECK_EQUAL(converter.get_type(f2), "void");
-}
-
-// Tests that constructors are annotated properly.
-BOOST_AUTO_TEST_CASE(constructor)
-{
-    char const* text = R"(
-        contract A {
-            int a;
-            constructor() public { a = 5; }
-        }
-    )";
-
-    auto const& ast = *parseAndAnalyse(text);
-    auto const& ctrt = *retrieveContractByName(ast, "A");
-    auto const& func = *ctrt.definedFunctions()[0];
-
-    TypeConverter converter;
-    converter.record(ast);
-
-    BOOST_CHECK(converter.has_record(func));
-    BOOST_CHECK_EQUAL(converter.get_name(func), "Ctor_A");
-    BOOST_CHECK_EQUAL(converter.get_type(func), "void");
 }
 
 // Integration test which should fail if a new member is added to the global
@@ -279,6 +251,7 @@ BOOST_AUTO_TEST_CASE(global_context_ids)
         parents,
         vector<ASTPointer<ASTNode>>{func}
     );
+    func->setScope(contract.get());
     BOOST_CHECK_EQUAL(contract->definedFunctions().size(), 1);
 
     SourceUnit unit(SourceLocation(), {contract});
@@ -404,44 +377,7 @@ BOOST_AUTO_TEST_CASE(struct_access)
     TypeConverter converter;
     converter.record(ast);
 
-    BOOST_CHECK_EQUAL(converter.get_name(mmbr), "A_StructB_Maparr_submap1");
-}
-
-// Tests that map index access calls are treated as function calls, with their
-// name being the base to the function call name, and their kind being the
-// return value type of said method.
-BOOST_AUTO_TEST_CASE(map_access)
-{
-    using ExprStmtPtr = ExpressionStatement const*;
-    using IndxExprPtr = IndexAccess const*;
-
-    char const* text = R"(
-        contract A {
-            mapping(int => mapping(int => int)) arr;
-            function f() public {
-                arr[1][1];
-            }
-        }
-    )";
-
-    auto const& ast = *parseAndAnalyse(text);
-    auto const& ctrt = *retrieveContractByName(ast, "A");
-    auto const& func = *ctrt.definedFunctions()[0];
-
-    auto const& stmt = *func.body().statements()[0];
-    auto const& expr = dynamic_cast<ExprStmtPtr>(&stmt)->expression();
-    auto const& idx1 = *dynamic_cast<IndxExprPtr>(&expr);
-    auto const& idx2 = *dynamic_cast<IndxExprPtr>(&idx1.baseExpression());
-
-    TypeConverter converter;
-    converter.record(ast);
-
-    BOOST_CHECK(converter.has_record(idx1));
-    BOOST_CHECK_EQUAL(converter.get_name(idx1), "A_Maparr_submap2");
-    BOOST_CHECK_EQUAL(converter.get_type(idx1), "sol_int256_t");
-    BOOST_CHECK(converter.has_record(idx2));
-    BOOST_CHECK_EQUAL(converter.get_name(idx2), "A_Maparr_submap1");
-    BOOST_CHECK_EQUAL(converter.get_type(idx2), "struct A_Maparr_submap2");
+    BOOST_CHECK_EQUAL(converter.get_name(mmbr), "Map_1");
 }
 
 // Ensures that storage variable identifiers are mapped to pointers, while
@@ -483,95 +419,6 @@ BOOST_AUTO_TEST_CASE(identifiers_as_pointers)
     BOOST_CHECK_EQUAL(converter.is_pointer(idx2), false);
 }
 
-// In Solidity, a function identifier may be encountered before said function is
-// declared. This regression test ensures that the TypeConverter handles this
-// case by resolving all (relevant) functions before resolving identifiers.
-BOOST_AUTO_TEST_CASE(function_and_identifier_oreder_regression)
-{
-    using ExprStmtPtr = ExpressionStatement const*;
-    using FuncExprPtr = FunctionCall const*;
-    using IndnExprPtr = Identifier const*;
-
-    char const* text = R"(
-        contract A {
-            function f() public { g(); }
-            function g() public { }
-        }
-    )";
-
-    auto const& ast = *parseAndAnalyse(text);
-    auto const& ctrt = *retrieveContractByName(ast, "A");
-    auto const& func = *ctrt.definedFunctions()[0];
-
-    auto const& stmt = *func.body().statements()[0];
-    auto const& expr = dynamic_cast<ExprStmtPtr>(&stmt)->expression();
-    auto const& call = *dynamic_cast<FuncExprPtr>(&expr);
-    auto const& indx = *dynamic_cast<IndnExprPtr>(&call.expression());
-
-    TypeConverter converter;
-    converter.record(ast);
-
-    BOOST_CHECK_EQUAL(converter.get_name(indx), "Method_A_Funcg");
-}
-
-BOOST_AUTO_TEST_CASE(modifier_names)
-{
-    char const* text = R"(
-        contract A {
-            modifier m1() { _; }
-            modifier m2() { _; }
-            modifier m3() { _; }
-            function f() public m1() m2() m3() pure { }
-        }
-    )";
-
-    auto const& ast = *parseAndAnalyse(text);
-    auto const& ctrt = *retrieveContractByName(ast, "A");
-    auto const& func = *ctrt.definedFunctions()[0];
-
-    TypeConverter converter;
-    converter.record(ast);
-
-    BOOST_CHECK_NE(func.modifiers().size(), 0);
-    for (unsigned int i = 0; i < func.modifiers().size(); ++i)
-    {
-        BOOST_CHECK_EQUAL(
-            converter.get_name(func) + "_mod" + std::to_string(i),
-            converter.get_name(*func.modifiers()[i])
-        );
-        BOOST_CHECK_EQUAL(
-            converter.get_type(func),
-            converter.get_type(*func.modifiers()[i])
-        );
-    }
-}
-
-BOOST_AUTO_TEST_CASE(modifier_types)
-{
-    char const* text = R"(
-        contract A {
-            modifier m1() { _; }
-            modifier m2(int a) { _; }
-            modifier m3(int a, int b) { _; }
-        }
-    )";
-
-    auto const& ast = *parseAndAnalyse(text);
-    auto const& ctrt = *retrieveContractByName(ast, "A");
-
-    TypeConverter converter;
-    converter.record(ast);
-
-    BOOST_CHECK_NE(ctrt.functionModifiers().size(), 0);
-    for (auto modifier : ctrt.functionModifiers())
-    {
-        for (auto param : modifier->parameters())
-        {
-            BOOST_CHECK_NO_THROW(converter.get_type(*param));
-        }
-    }
-}
-
 // Ensures names are escaped, as per the translation specifications.
 BOOST_AUTO_TEST_CASE(name_escape)
 {
@@ -586,7 +433,6 @@ BOOST_AUTO_TEST_CASE(name_escape)
     auto const& ast = *parseAndAnalyse(text);
     auto const& ctrt = *retrieveContractByName(ast, "A_B");
     auto const& strt = *ctrt.definedStructs()[0];
-    auto const& func = *ctrt.definedFunctions()[0];
     auto const& mapv = *ctrt.stateVariables()[0];
 
     TypeConverter converter;
@@ -594,8 +440,7 @@ BOOST_AUTO_TEST_CASE(name_escape)
 
     BOOST_CHECK_EQUAL(converter.get_name(ctrt), "A__B");
     BOOST_CHECK_EQUAL(converter.get_name(strt), "A__B_StructC__D");
-    BOOST_CHECK_EQUAL(converter.get_name(func), "Method_A__B_Funcf__func");
-    BOOST_CHECK_EQUAL(converter.get_name(mapv), "A__B_Mapm__map_submap1");
+    BOOST_CHECK_EQUAL(converter.get_name(mapv), "Map_1");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

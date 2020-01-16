@@ -22,91 +22,125 @@ namespace modelcheck
 
 // -------------------------------------------------------------------------- //
 
-ModifierBlockConverter::Context::Context(
-    FunctionDefinition const& _func, size_t _i
-): func(_func)
+ModifierBlockConverter::ModifierBlockConverter::Factory::Factory(
+    FunctionDefinition const& _func, string _name
+): m_func(_func), m_name(move(_name))
 {
-    // Checks that _i is in bounds.
-    if (func.modifiers().size() < _i)
-    {
-        throw runtime_error("FunctionDefinition of unknown i.");
-    }
-
-    // Resolves the contract on which the function resides.
-    auto const* scope = dynamic_cast<ContractDefinition const*>(func.scope());
+    auto const* scope = dynamic_cast<ContractDefinition const*>(_func.scope());
     if (!scope)
     {
         throw runtime_error("FunctionDefinition of unknown scope.");
     }
 
-    // Extracts the inovcation and definition.
-    curr = func.modifiers()[_i].get();
-    for (auto const& mod : scope->functionModifiers())
+    for (auto mod : _func.modifiers())
     {
-        if (mod->name() == curr->name()->name())
+        ModifierDefinition const* match = nullptr;
+        string const& target_name = mod->name()->name();
+
+        for (auto const* contract : scope->annotation().linearizedBaseContracts)
         {
-            def = mod;
-            break;
+            for (auto const* candidate : contract->functionModifiers())
+            {
+                if (target_name == candidate->name())
+                {
+                    match = candidate;
+                    break;
+                }
+            }
+
+            if (match) break;
+        }
+
+        if (match)
+        {
+            m_filtered_mods.push_back(make_pair(match, mod.get()));
         }
     }
-    if (!def)
+}
+
+// -------------------------------------------------------------------------- //
+
+ModifierBlockConverter ModifierBlockConverter::Factory::generate(
+    size_t _i, CallState const& _statedata, TypeConverter const& _types
+)
+{
+    // Checks that _i is in bounds.
+    if (len() < _i)
     {
-        throw runtime_error("FunctionDefinition has unknown modifier.");
+        throw runtime_error("FunctionDefinition of unknown i.");
     }
 
-    // Analyzes the "next call". next_is_stateful defualts to true for case 1.
-    if (_i + 1 < func.modifiers().size())
+    // Finds the definition/invocation pair.
+    auto const& def_invoke_pair = m_filtered_mods[_i];
+
+    // Computes the next call name.
+    string next_name;
+    if (_i + 1 < len())
     {
-        next = func.modifiers()[_i + 1].get();
+        next_name = FunctionUtilities::modifier_name(m_name, _i + 1);
     }
     else
     {
-        next = &func;
+        next_name = FunctionUtilities::base_name(m_name);
     }
 
-    // Determines payment behaviour.
-    manage_pay = (_i == 0);
-    is_payable = _func.isPayable();
+    // Constructors the bodifier block.
+    return ModifierBlockConverter(
+        m_func,
+        def_invoke_pair.first,
+        def_invoke_pair.second,
+        _statedata,
+        _types,
+        next_name,
+        _i == 0
+    );
+}
+
+// --------------------------------------------------------------------------
+
+size_t ModifierBlockConverter::Factory::len() const
+{
+    return m_filtered_mods.size();
+}
+
+// -------------------------------------------------------------------------- //
+
+
+bool ModifierBlockConverter::Factory::empty() const
+{
+    return m_filtered_mods.empty();
 }
 
 // -------------------------------------------------------------------------- //
 
 ModifierBlockConverter::ModifierBlockConverter(
     FunctionDefinition const& _func,
-    size_t _i,
-	CallState const& _statedata,
-    TypeConverter const& _types
-): ModifierBlockConverter(Context(_func, _i), _statedata, _types)
-{
-}
-
-ModifierBlockConverter::ModifierBlockConverter(
-    Context const& _ctx,
+    ModifierDefinition const* _def,
+    ModifierInvocation const* _curr,
     CallState const& _statedata,
-    TypeConverter const& _types
+    TypeConverter const& _types,
+    std::string _next,
+    bool _entry
 ): GeneralBlockConverter(
-    _ctx.def->parameters(),
-    _ctx.def->body(),
+    _def->parameters(),
+    _func.returnParameters(),
+    _def->body(),
     _statedata,
     _types,
-    _ctx.manage_pay,
-    _ctx.is_payable
+    _entry,
+    _func.isPayable()
 ), M_STATEDATA(_statedata)
  , M_TYPES(_types)
- , M_TRUE_PARAMS(_ctx.func.parameters())
- , M_USER_PARAMS(_ctx.def->parameters())
- , M_USER_ARGS(_ctx.curr->arguments())
- , M_NEXT_CALL(_types.get_name(*_ctx.next))
- , m_shadow_decls(true)
+ , M_TRUE_PARAMS(_func.parameters())
+ , M_USER_PARAMS(_def->parameters())
+ , M_USER_ARGS(_curr->arguments())
+ , M_NEXT_CALL(move(_next))
+ , m_shadow_decls(CodeType::SHADOWBLOCK)
 {
-	// TODO(scottwe): support multiple return types.
-	if (_ctx.func.returnParameters().size() > 1)
+	if (block_type() == BlockType::Operation)
 	{
-		throw runtime_error("Multiple return values not yet supported.");
-	}
-	else if (!_ctx.func.returnParameters().empty())
-	{
-        auto const& ARG = *_ctx.func.returnParameters()[0];
+	    // TODO(scottwe): support multiple return types.
+        auto const& ARG = *_func.returnParameters()[0];
 		m_rv = make_shared<CVarDecl>(
             M_TYPES.get_type(ARG),
             VariableScopeResolver::rewrite("rv", true, VarContext::FUNCTION)
@@ -126,7 +160,7 @@ void ModifierBlockConverter::enter(
     CBlockList & _stmts, VariableScopeResolver &_decls
 )
 {
-    if (m_rv)
+    if (block_type() == BlockType::Operation)
     {
 		_stmts.push_back(m_rv);
     }
@@ -154,7 +188,7 @@ void ModifierBlockConverter::enter(
 
 void ModifierBlockConverter::exit(CBlockList & _stmts, VariableScopeResolver &)
 {
-    if (m_rv)
+    if (block_type() == BlockType::Operation)
     {
         _stmts.push_back(make_shared<CReturn>(m_rv->id()));
     }
@@ -165,7 +199,7 @@ void ModifierBlockConverter::exit(CBlockList & _stmts, VariableScopeResolver &)
 bool ModifierBlockConverter::visit(Return const&)
 {
     CExprPtr rv_id = nullptr;
-    if (m_rv)
+    if (block_type() == BlockType::Operation)
     {
         rv_id = m_rv->id();
     }
@@ -186,6 +220,12 @@ void ModifierBlockConverter::endVisit(PlaceholderStatement const&)
         auto const SYM = m_shadow_decls.resolve_declaration(*ARG);
 		builder.push(make_shared<CIdentifier>(SYM, false));
 	}
+
+    if (block_type() == BlockType::Initializer)
+    {
+        // TODO: avoid hardcoding this...
+        builder.push(make_shared<CIdentifier>("dest", true));
+    }
 
     CExprPtr call = builder.merge_and_pop();
     if (m_rv)

@@ -42,77 +42,6 @@ set<string> const TypeConverter::m_global_context_simple_values({"now"});
 
 // -------------------------------------------------------------------------- //
 
-AccessDepthResolver::AccessDepthResolver(IndexAccess const& _base)
-: m_base(_base) {}
-
-Mapping const* AccessDepthResolver::resolve()
-{
-    m_decl = nullptr;
-    m_submap_count = 0;
-    m_base.accept(*this);
-
-    Mapping const* mapping = nullptr;
-    if (m_decl)
-    {
-        mapping = dynamic_cast<Mapping const*>(m_decl->typeName());
-        for (unsigned int i = 1; (i < m_submap_count) && mapping; ++i)
-        {
-            mapping = dynamic_cast<Mapping const*>(&mapping->valueType());
-        }
-    }
-    return mapping;
-}
-
-bool AccessDepthResolver::visit(Conditional const&)
-{
-	throw std::runtime_error("Conditional map accesses are unsupported.");
-}
-
-bool AccessDepthResolver::visit(MemberAccess const& _node)
-{
-    auto const EXPR_TYPE = _node.expression().annotation().type;
-    if (auto contract_type = dynamic_cast<ContractType const*>(EXPR_TYPE))
-    {
-        for (auto member : contract_type->contractDefinition().stateVariables())
-        {
-            if (member->name() == _node.memberName())
-            {
-                m_decl = member;
-                break;
-            }
-        }
-    }
-    else if (auto struct_type = dynamic_cast<StructType const*>(EXPR_TYPE))
-    {
-        for (auto member : struct_type->structDefinition().members())
-        {
-            if (member->name() == _node.memberName())
-            {
-                m_decl = member.get();
-                break;
-            }
-        }
-    }
-    return false;
-}
-
-bool AccessDepthResolver::visit(IndexAccess const& _node)
-{
-	++m_submap_count;
-	_node.baseExpression().accept(*this);
-	return false;
-}
-
-bool AccessDepthResolver::visit(Identifier const& _node)
-{
-    m_decl = dynamic_cast<VariableDeclaration const*>(
-        _node.annotation().referencedDeclaration
-    );
-	return false;
-}
-
-// -------------------------------------------------------------------------- //
-
 void TypeConverter::record(SourceUnit const& _unit)
 {
     auto contracts = ASTNode::filteredNodes<ContractDefinition>(_unit.nodes());
@@ -143,11 +72,11 @@ void TypeConverter::record(SourceUnit const& _unit)
 
     // Pass 2: assign types to all member fields and methods, such that their
     // types may be referenced within function bodies.
-    for (auto contract : contracts)
+    for (auto con : contracts)
     {
-        ScopedSwap<ContractDefinition const*> swap(m_curr_contract, contract);
+        ScopedSwap<ContractDefinition const*> swap(m_curr_contract, con);
 
-        for (auto structure : contract->definedStructs())
+        for (auto structure : con->definedStructs())
         {
             for (auto decl : structure->members())
             {
@@ -155,60 +84,47 @@ void TypeConverter::record(SourceUnit const& _unit)
             }
         }
 
-        for (auto decl : contract->stateVariables())
+        for (auto decl : con->stateVariables())
         {
             decl->accept(*this);
         }
 
-        for (auto fun : contract->definedFunctions())
+        if (!con->isInterface())
         {
-            auto const* returnParams = fun->returnParameterList().get();
-
+            for (auto fun : con->definedFunctions())
             {
-                ScopedSwap<bool> swap(m_is_retval, true);
-                returnParams->accept(*this);
+                fun->parameterList().accept(*this);
+                if (fun->isConstructor()) continue;
+
+                auto const* returnParams = fun->returnParameterList().get();
+                {
+                    ScopedSwap<bool> swap(m_is_retval, true);
+                    returnParams->accept(*this);
+                }
+
+                auto const FUNC_RETURN_TYPE = get_type(*returnParams);
+                auto const FUNC_NAME = FunctionSpecialization(*fun).name();
+                m_name_lookup.insert({fun, FUNC_NAME});
+                m_type_lookup.insert({fun, FUNC_RETURN_TYPE});
             }
 
-            ostringstream fun_oss;
-            fun_oss << (fun->isConstructor() ? "Ctor" : "Method") << "_"
-                    << escape_decl_name(*contract);
-
-            if (!fun->isConstructor())
+            for (auto modifier : con->functionModifiers())
             {
-                fun_oss << "_Func" << escape_decl_name(*fun);
+                modifier->parameterList().accept(*this);
             }
-
-            auto const FUNC_RETURN_TYPE = get_type(*returnParams);
-            auto const FUNC_NAME = fun_oss.str();
-            m_name_lookup.insert({fun, FUNC_NAME});
-            m_type_lookup.insert({fun, FUNC_RETURN_TYPE});
-
-            for (unsigned int i = 0; i < fun->modifiers().size(); ++i)
-            {
-                ostringstream mod_oss;
-                mod_oss << FUNC_NAME << "_mod" << i;
-
-                ModifierInvocation const* modifier = fun->modifiers()[i].get();
-                m_name_lookup.insert({modifier, mod_oss.str()});
-                m_type_lookup.insert({modifier, FUNC_RETURN_TYPE});
-            }
-
-            fun->parameterList().accept(*this);
-        }
-
-        for (auto modifier : contract->functionModifiers())
-        {
-            modifier->parameterList().accept(*this);
         }
     }
 
     // Pass 3: assign types to Solidity expressions, where applicable.
     for (auto contract : contracts)
     {
+        if (contract->isInterface()) continue;
+
         ScopedSwap<ContractDefinition const*> swap(m_curr_contract, contract);
 
         for (auto fun : contract->definedFunctions())
         {
+            if (!fun->isImplemented()) continue;
             fun->body().accept(*this);
         }
 
@@ -256,6 +172,14 @@ string TypeConverter::get_name(ASTNode const& _node) const
         {
             name = DECL->name();
         }
+        else if (auto EXPR = dynamic_cast<Expression const*>(&_node))
+        {
+            name += "(" + EXPR->annotation().type->canonicalName() + ")";
+        }
+        else if (auto TYPE = dynamic_cast<TypeName const*>(&_node))
+        {
+            name += "(" + TYPE->annotation().type->canonicalName() + ")";
+        }
         throw runtime_error("get_name called on unknown ASTNode: " + name);
     }
     return RES->second;
@@ -269,7 +193,7 @@ string TypeConverter::get_simple_ctype(Type const& _type)
 
     if (type.category() == Type::Category::Address) return "sol_address_t";
     if (type.category() == Type::Category::Bool) return "sol_bool_t";
-
+    
     if (auto int_ptr = dynamic_cast<IntegerType const*>(&type))
     {
         ostringstream numeric_oss;
@@ -278,7 +202,7 @@ string TypeConverter::get_simple_ctype(Type const& _type)
         numeric_oss << "int" << int_ptr->numBits() << "_t";
         return numeric_oss.str();
     }
-    if (auto fixed_ptr = dynamic_cast<FixedPointType const*>(&type))
+    else if (auto fixed_ptr = dynamic_cast<FixedPointType const*>(&type))
     {
         ostringstream numeric_oss;
         numeric_oss << "sol_";
@@ -287,8 +211,13 @@ string TypeConverter::get_simple_ctype(Type const& _type)
                     << "X" << fixed_ptr->fractionalDigits() << "_t";
         return numeric_oss.str();
     }
+    else if (auto array_ptr = dynamic_cast<ArrayType const*>(&type))
+    {
+        if (array_ptr->isString()) return "sol_uint256_t";
+    }
 
-    throw runtime_error("Unable to resolve simple type from _type.");
+    string const TYPE_NAME = type.canonicalName();
+    throw runtime_error("Unable to resolve simple type from: " + TYPE_NAME);
 }
 
 // -------------------------------------------------------------------------- //
@@ -370,6 +299,13 @@ CExprPtr TypeConverter::get_nd_val(
 
 // -------------------------------------------------------------------------- //
 
+MapDeflate TypeConverter::mapdb() const
+{
+    return m_mapdb;
+}
+
+// -------------------------------------------------------------------------- //
+
 bool TypeConverter::visit(VariableDeclaration const& _node)
 {
     if (!_node.typeName())
@@ -419,16 +355,46 @@ bool TypeConverter::visit(FunctionTypeName const& _node)
     throw runtime_error("Function type unsupported.");
 }
 
-bool TypeConverter::visit(Mapping const&)
+bool TypeConverter::visit(Mapping const& _node)
 {
-    ++m_rectype_depth;
-    return true;
+    auto const& record = m_mapdb.query(_node);
+    m_name_lookup.insert({&_node, record.name});
+    m_type_lookup.insert({&_node, "struct " + record.name});
+
+    for (auto const* key : record.key_types) key->accept(*this);
+    record.value_type->accept(*this);
+
+    return false;
 }
 
 bool TypeConverter::visit(ArrayTypeName const& _node)
 {
     (void) _node;
     throw runtime_error("Array type unsupported.");
+}
+
+bool TypeConverter::visit(IndexAccess const& _node)
+{
+    FlatIndex idx(_node);
+    auto const& record = m_mapdb.resolve(idx.decl());
+
+    m_type_lookup.insert({&_node, get_type(*record.value_type)});
+    m_name_lookup.insert({&_node, record.name});
+
+    for (auto const* idx_expr : idx.indices()) idx_expr->accept(*this);
+    idx.base().accept(*this);
+
+    return false;
+}
+
+bool TypeConverter::visit(EmitStatement const&)
+{
+    return false;
+}
+
+bool TypeConverter::visit(EventDefinition const&)
+{
+    return false;
 }
 
 // -------------------------------------------------------------------------- //
@@ -459,21 +425,9 @@ void TypeConverter::endVisit(ParameterList const& _node)
     }
 }
 
-void TypeConverter::endVisit(Mapping const& _node)
-{
-    ostringstream name_oss;
-    name_oss << get_name(*m_curr_decl->scope())
-             << "_Map" + escape_decl_name(*m_curr_decl)
-             << "_submap" << to_string(m_rectype_depth);
-
-    m_name_lookup.insert({&_node, name_oss.str()});
-    m_type_lookup.insert({&_node, "struct " + name_oss.str()});
-
-    --m_rectype_depth;
-}
-
 void TypeConverter::endVisit(MemberAccess const& _node)
 {
+    // TODO: this is roughly duplicated by analysis/Mapping.cpp
 	auto const EXPR_TYPE = _node.expression().annotation().type;
     if (auto contract_type = dynamic_cast<ContractType const*>(EXPR_TYPE))
     {
@@ -507,21 +461,11 @@ void TypeConverter::endVisit(MemberAccess const& _node)
 	}
 }
 
-void TypeConverter::endVisit(IndexAccess const& _node)
-{
-    auto mapping = AccessDepthResolver(_node).resolve();
-    if (!mapping)
-    {
-        throw runtime_error("Cannot resolve Mapping from IndexAccess.");
-    }
-
-    m_type_lookup.insert({&_node, get_type(mapping->valueType())});
-    m_name_lookup.insert({&_node, get_name(*mapping)});
-}
-
 void TypeConverter::endVisit(Identifier const& _node)
 {
     auto const& NODE_NAME = _node.name();
+    if (NODE_NAME == "super") return;
+
     auto const MAGIC_RES = m_global_context_types.find(NODE_NAME);
     if (MAGIC_RES != m_global_context_types.end())
     {
@@ -543,12 +487,6 @@ void TypeConverter::endVisit(Identifier const& _node)
         {
             ref = m_curr_contract;
             loc = VariableDeclaration::Storage;
-        }
-        else if (NODE_NAME == "super")
-        {
-            // Note: ContractDefinitionAnnotation::linearizedBaseContracts.
-            // TODO(scottwe): resolve super; not needed for MVP prototype.
-            throw runtime_error("super is currently unsupported.");
         }
         else
         {

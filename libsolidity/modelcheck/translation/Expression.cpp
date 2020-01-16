@@ -5,7 +5,6 @@
 
 #include <libsolidity/modelcheck/translation/Expression.h>
 
-#include <libsolidity/modelcheck/analysis/FunctionCall.h>
 #include <libsolidity/modelcheck/codegen/Details.h>
 #include <libsolidity/modelcheck/codegen/Literals.h>
 #include <libsolidity/modelcheck/utils/AST.h>
@@ -98,7 +97,9 @@ bool ExpressionConverter::visit(Assignment const& _node)
 		ScopedSwap<bool> swap(m_lval, true);
 		if (auto map = LValueSniffer<IndexAccess>(_node.leftHandSide()).find())
 		{
-			generate_mapping_call("Write", M_TYPES.get_name(*map), *map, rhs);
+			FlatIndex idx(*map);
+			auto record = M_TYPES.mapdb().resolve(idx.decl());
+			generate_mapping_call("Write", record, idx, rhs);
 		}
 		else
 		{
@@ -227,20 +228,20 @@ bool ExpressionConverter::visit(IndexAccess const& _node)
 	{
 	case Type::Category::Mapping:
 		{
-			string const MAP_NAME = M_TYPES.get_name(_node);
-			if (m_find_ref)
+			FlatIndex idx(_node);
+			auto record = M_TYPES.mapdb().resolve(idx.decl());
+
+			if (idx.indices().size() != record.key_types.size())
 			{
-				generate_mapping_call("Ref", MAP_NAME, _node, nullptr);
+				throw runtime_error("Partial map lookup unsupported.");
 			}
-			else if (m_lval)
+			else if (m_find_ref)
 			{
-				generate_mapping_call("Ref", MAP_NAME, _node, nullptr);
-				m_subexpr = make_shared<CDereference>(m_subexpr);
+				throw runtime_error("Map references unsupported.");
 			}
-			else
-			{
-				generate_mapping_call("Read", MAP_NAME, _node, nullptr);
-			}
+
+			generate_mapping_call("Read", record, idx, nullptr);
+
 			if (is_wrapped_type(*_node.annotation().type))
 			{
 				m_subexpr = make_shared<CMemberAccess>(m_subexpr, "v");
@@ -348,21 +349,30 @@ void ExpressionConverter::generate_binary_op(
 }
 
 void ExpressionConverter::generate_mapping_call(
-	string const& _op, string const& _id, IndexAccess const& _map, CExprPtr _v
+	string const& _op,
+	MapDeflate::FlatMap const& _map,
+	FlatIndex const& _idx,
+	CExprPtr _v
 )
 {
-	auto const* const MAP_T = dynamic_cast<MappingType const*>(
-		_map.baseExpression().annotation().type
-	);
-	auto const& KEY_T = MAP_T->keyType();
-
 	// The type of baseExpression is an array, so it is not a wrapped type.
-	CFuncCallBuilder builder(_op + "_" + _id);
-	builder.push(_map.baseExpression(), m_statedata, M_TYPES, m_decls, true);
-	builder.push(
-		*_map.indexExpression(), m_statedata, M_TYPES, m_decls, false, KEY_T
-	);
-	if (_v) builder.push(move(_v), MAP_T->valueType());
+	CFuncCallBuilder builder(_op + "_" + _map.name);
+	builder.push(_idx.base(), m_statedata, M_TYPES, m_decls, true);
+
+	{
+		auto iitr = _idx.indices().begin();
+		auto mitr = _map.key_types.begin();
+		while (iitr != _idx.indices().end() && mitr != _map.key_types.end())
+		{
+			auto const& idx = (**iitr);
+			auto const* type = (*mitr)->annotation().type;
+			builder.push(idx, m_statedata, M_TYPES, m_decls, false, type);
+			++iitr;
+			++mitr;
+		}
+	}
+
+	if (_v) builder.push(move(_v), _map.value_type->annotation().type);
 	m_subexpr = builder.merge_and_pop();
 }
 
@@ -530,21 +540,15 @@ void ExpressionConverter::print_cast(FunctionCall const& _call)
 
 void ExpressionConverter::print_function(FunctionCall const& _call)
 {
-	auto ftype = dynamic_cast<FunctionType const*>(
-		_call.expression().annotation().type
-	);
-	if (!ftype)
-	{
-		throw runtime_error("Function encountered without type annotations.");
-	}
+	FunctionCallAnalyzer calldata(_call);
 
-	switch (ftype->kind())
+	switch (calldata.type().kind())
 	{
 	case FunctionType::Kind::Internal:
 	case FunctionType::Kind::External:
 	case FunctionType::Kind::BareCall:
 	case FunctionType::Kind::BareStaticCall:
-		print_method(*ftype, _call);
+		print_method(calldata);
 		break;
 	case FunctionType::Kind::DelegateCall:
 	case FunctionType::Kind::BareDelegateCall:
@@ -555,8 +559,10 @@ void ExpressionConverter::print_function(FunctionCall const& _call)
 		print_contract_ctor(_call);
 		break;
 	case FunctionType::Kind::Send:
+		print_payment(_call, true);
+		break;
 	case FunctionType::Kind::Transfer:
-		print_payment(_call);
+		print_payment(_call, false);
 		break;
 	case FunctionType::Kind::KECCAK256:
 		// TODO(scottwe): implement.
@@ -565,8 +571,8 @@ void ExpressionConverter::print_function(FunctionCall const& _call)
 		// TODO(scottwe): when should this be acceptable?
 		throw runtime_error("Selfdestruct unsupported.");
 	case FunctionType::Kind::Revert:
-		// TODO(scottwe): decide on rollback versus assert branch pruning.
-		throw runtime_error("Revert not yet supported.");
+		print_revert(_call.arguments());
+		break;
 	case FunctionType::Kind::ECRecover:
 		// TODO(scottwe): implement.
 		throw runtime_error("ECRecover not yet supported.");
@@ -641,41 +647,108 @@ void ExpressionConverter::print_function(FunctionCall const& _call)
 	}
 }
 
-void ExpressionConverter::print_method(
-	FunctionType const& _type, FunctionCall const& _call
-)
+void ExpressionConverter::print_method(FunctionCallAnalyzer const& _calldata)
 {
-	// Finds mutability of the function.
-	auto &decl = dynamic_cast<FunctionDefinition const&>(_type.declaration());
-	auto &root = FunctionUtilities::extract_root(decl);
+	// Analyzes the function call.
+	auto &fdecl = _calldata.decl();
+	FunctionSpecialization call(fdecl);
 
-	// Starts generating the function call.
-	CFuncCallBuilder builder(M_TYPES.get_name(root));
-
-	// Sets state for the next call.
-	FunctionCallAnalyzer calldata(_call);
-	const bool IS_EXT = (calldata.context() != nullptr);
-	if (IS_EXT)
+	string callname;
+	bool is_ext_call = false;
+	if (_calldata.is_super())
 	{
-		calldata.context()->accept(*this);
-		if (!(calldata.id() && M_TYPES.is_pointer(*calldata.id())))
+		if (auto super = m_decls.spec()->super())
 		{
-			m_subexpr = make_shared<CReference>(m_subexpr);
+			callname = super->name();
 		}
-		builder.push(m_subexpr);
+		else
+		{
+			throw runtime_error("Usage of `super` keyword without super data.");
+		}
 	}
 	else
 	{
-		builder.push(make_shared<CIdentifier>("self", true));
+		is_ext_call = (_calldata.context() != nullptr);
+		if (!is_ext_call)
+		{
+			auto const& hierarchy
+				= m_decls.spec()->useby().annotation().linearizedBaseContracts;
+
+			// TODO: could this be cached?
+			FunctionDefinition const* override = nullptr;
+			for (auto derived : hierarchy)
+			{
+				for (auto const* member_func : derived->definedFunctions())
+				{
+					if (member_func->name() == call.func().name())
+					{
+						override = member_func;
+						break;
+					}
+				}
+				if (override) break;
+			}
+
+			call = FunctionSpecialization(*override, m_decls.spec()->useby());
+		}
+		callname = call.name();
 	}
-	pass_next_call_state(_call, builder, IS_EXT);
+	CFuncCallBuilder builder(callname);	
+
+	// Sets state for the next call.
+	size_t param_idx = 0;
+	if (call.source().isLibrary())
+	{
+		auto const* ARG_TYPE = fdecl.parameters()[param_idx]->type();
+		builder.push(
+			*_calldata.context(), m_statedata, M_TYPES, m_decls, false, ARG_TYPE
+		);
+		++param_idx;
+	}
+	else
+	{
+		if (is_ext_call)
+		{
+			_calldata.context()->accept(*this);
+			if (!(_calldata.id() && M_TYPES.is_pointer(*_calldata.id())))
+			{
+				m_subexpr = make_shared<CReference>(m_subexpr);
+			}
+			builder.push(m_subexpr);
+		}
+		else
+		{
+			builder.push(make_shared<CIdentifier>("self", true));
+		}
+		pass_next_call_state(_calldata, builder, is_ext_call);
+	}
+
+	// Passes dest if contract construction is in use.
+	auto rvs = _calldata.type().returnParameterTypes();
+	if (rvs.size() == 1 && rvs[0]->category() == Type::Category::Contract)
+	{
+		// TODO: duplication
+		CExprPtr dest;
+		if (m_last_assignment)
+		{
+			dest = make_shared<CReference>(make_shared<CIdentifier>(
+				m_decls.resolve_identifier(*m_last_assignment), false
+			));
+		}
+		else
+		{
+			// TODO: hard coding
+			dest = make_shared<CIdentifier>("dest", true);
+		}
+		builder.push(dest);
+	}
 
 	// Pushes all user provided arguments.
-	for (unsigned int i = 0; i < calldata.args().size(); ++i)
+	for (size_t i = 0; i < _calldata.args().size(); ++i)
 	{
-		auto const* ARG_TYPE = decl.parameters()[i]->type();
+		auto const* ARG_TYPE = fdecl.parameters()[param_idx + i]->type();
 		builder.push(
-			*calldata.args()[i], m_statedata, M_TYPES, m_decls, false, ARG_TYPE
+			*_calldata.args()[i], m_statedata, M_TYPES, m_decls, false, ARG_TYPE
 		);
 	}
 
@@ -683,9 +756,9 @@ void ExpressionConverter::print_method(
 	m_subexpr = builder.merge_and_pop();
 
 	// Unwraps the return value, if it is a wraped type.
-	if (_type.returnParameterTypes().size() == 1)
+	if (rvs.size() == 1)
 	{
-		if (is_wrapped_type(*_type.returnParameterTypes()[0]))
+		if (is_wrapped_type(*rvs[0]))
 		{
 			m_subexpr = make_shared<CMemberAccess>(m_subexpr, "v");
 		}
@@ -700,11 +773,22 @@ void ExpressionConverter::print_contract_ctor(FunctionCall const& _call)
 		auto const DECL = contract_type->annotation().referencedDeclaration;
 		if (auto contract = dynamic_cast<ContractDefinition const*>(DECL))
 		{
-			auto const DECL = m_decls.resolve_identifier(*m_last_assignment);
-			builder.push(make_shared<CReference>(
-				make_shared<CIdentifier>(DECL, false)
-			));
-			pass_next_call_state(_call, builder, true);
+			// TODO: duplication
+			CExprPtr dest;
+			if (m_last_assignment)
+			{
+				dest = make_shared<CReference>(make_shared<CIdentifier>(
+					m_decls.resolve_identifier(*m_last_assignment), false
+				));
+			}
+			else
+			{
+				// TODO: hard coding.
+				dest = make_shared<CIdentifier>("dest", false);
+			}
+			
+			builder.push(dest);
+			pass_next_call_state(FunctionCallAnalyzer(_call), builder, true);
 
 			if (auto const& ctor = contract->constructor())
 			{
@@ -731,10 +815,10 @@ void ExpressionConverter::print_contract_ctor(FunctionCall const& _call)
 	}
 }
 
-void ExpressionConverter::print_payment(FunctionCall const& _call)
+void ExpressionConverter::print_payment(FunctionCall const& _call, bool _nothrow)
 {
-	const AddressType ARG1_TYPE(StateMutability::Payable);
-	const IntegerType ARG2_TYPE(256, IntegerType::Modifier::Unsigned);
+	const AddressType ADR_TYPE(StateMutability::Payable);
+	const IntegerType AMT_TYPE(256, IntegerType::Modifier::Unsigned);
 
 	auto const& args = _call.arguments();
 	if (args.size() != 1)
@@ -743,22 +827,66 @@ void ExpressionConverter::print_payment(FunctionCall const& _call)
 	}
 	else if (auto call = NodeSniffer<MemberAccess>(_call).find())
 	{
+		// Computes source balance.
 		auto const BAL_MEMBER = ContractUtilities::balance_member();
 		auto src = make_shared<CIdentifier>("self", true);
-		auto bal = make_shared<CMemberAccess>(src, BAL_MEMBER);
+		auto srcbal = make_shared<CMemberAccess>(src, BAL_MEMBER);
 
-		auto balref = make_shared<CReference>(bal);
-		auto const& DST = call->expression();
+		// Generates source balance and amount arguments.
+		auto srcbalref = make_shared<CReference>(srcbal);
 		auto const& AMT = *args[0];
 
-		CFuncCallBuilder builder("_pay");
-		builder.push(balref);
-		builder.push(DST, m_statedata, M_TYPES, m_decls, false, &ARG1_TYPE);
-		builder.push(AMT, m_statedata, M_TYPES, m_decls, false, &ARG2_TYPE);
+		// Searches for a base contract.
+		auto const& dst = call->expression();
+		FunctionCall const* cast = NodeSniffer<FunctionCall>(dst).find();
+		if (cast)
+		{
+			auto const BASE = cast->expression().annotation().type->category();
+			if (BASE == Type::Category::Contract) 
+			{
+				if (cast->annotation().kind != FunctionCallKind::TypeConversion)
+				{
+					cast = nullptr;
+				}
+			}
+			else
+			{
+				cast = nullptr;
+			}
+		}
+
+		// Determines if recipient is known.
+		string paymode;
+		CExprPtr recipient;
+		TypePointer recipient_type;
+		if (cast)
+		{
+			throw runtime_error("Send to contract not yet supported.");
+		}
+		else
+		{
+			paymode = "_pay";
+			dst.accept(*this);
+			recipient = m_subexpr;
+			recipient_type =  (&ADR_TYPE);
+			// TODO: warn about approximation.
+			// TODO: map target to address space.
+		}
+
+		// Determines if the call throws.
+		if (_nothrow)
+		{
+			paymode += "_use_rv";
+		}
+
+		// Generates the call.
+		CFuncCallBuilder builder(paymode);
+		builder.push(srcbalref);
+		builder.push(recipient, recipient_type);
+		builder.push(AMT, m_statedata, M_TYPES, m_decls, false, &AMT_TYPE);
 		m_subexpr = builder.merge_and_pop();
 
 		// TODO: handle fallbacks.
-		// TODO: map target to address space.
 	}
 	else
 	{
@@ -781,16 +909,24 @@ void ExpressionConverter::print_assertion(string _type, SolArgList const& _args)
 	m_subexpr = builder.merge_and_pop();
 }
 
+void ExpressionConverter::print_revert(SolArgList const&)
+{
+	// TODO(scottwe): support for messages.
+	CFuncCallBuilder builder("sol_require");
+	builder.push(Literals::ZERO);
+	builder.push(Literals::ZERO);
+	m_subexpr = builder.merge_and_pop();
+}
+
 void ExpressionConverter::pass_next_call_state(
-	FunctionCall const& _call, CFuncCallBuilder & _builder, bool _is_ext
+	FunctionCallAnalyzer const& _call, CFuncCallBuilder & _builder, bool _is_ext
 )
 {
-	FunctionCallAnalyzer calldata(_call);
 	CExprPtr value;
-	if (calldata.value())
+	if (_call.value())
 	{
 		value = ExpressionConverter(
-			*calldata.value(), m_statedata, M_TYPES, m_decls, false
+			*_call.value(), m_statedata, M_TYPES, m_decls, false
 		).convert();
 		value = FunctionUtilities::try_to_wrap(
 			*ContractUtilities::balance_type(), move(value)

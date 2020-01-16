@@ -24,7 +24,7 @@ NewCallSummary::NewCallSummary(ContractDefinition const& _src)
 {
     for (auto func : _src.definedFunctions())
     {
-        Visitor visitor(func);
+        Visitor visitor(func, 2);
 
         if (func->isConstructor())
         {
@@ -32,6 +32,21 @@ NewCallSummary::NewCallSummary(ContractDefinition const& _src)
             {
                 if (call.dest && call.dest->isStateVariable())
                 {
+                    m_children.push_back(call);
+                }
+                else
+                {
+                    m_violations.push_back(call);
+                }
+            }
+        }
+        else if (func->functionType(false) == nullptr)
+        {
+            for (auto const& call :visitor.calls)
+            {
+                if (call.is_retval)
+                {
+
                     m_children.push_back(call);
                 }
                 else
@@ -58,9 +73,16 @@ NewCallSummary::CallGroup const& NewCallSummary::violations() const
     return m_violations;
 }
 
-NewCallSummary::Visitor::Visitor(FunctionDefinition const* _context)
-: m_context(_context)
+NewCallSummary::Visitor::Visitor(
+    FunctionDefinition const* _context, size_t _depth_limit
+)
+    : M_DEPTH_LIMIT(_depth_limit)
+    , m_context(_context)
 {
+    if (M_DEPTH_LIMIT == 0)
+    {
+        throw runtime_error("AllocationSite analysis exceeded depth limit.");
+    }
     _context->accept(*this);
 }
 
@@ -69,14 +91,57 @@ bool NewCallSummary::Visitor::visit(FunctionCall const& _node)
     auto const* NEWTYPE = dynamic_cast<ContractType const*>(
         _node.annotation().type
     );
+    auto const* CALLTYPE = dynamic_cast<FunctionType const*>(
+        _node.expression().annotation().type
+    );
 
     if (NEWTYPE)
     {
         calls.emplace_back();
         calls.back().callsite = &_node;
-        calls.back().dest = m_dest;
         calls.back().context = m_context;
-        calls.back().type = (&NEWTYPE->contractDefinition());
+        calls.back().is_retval = m_return;
+
+        // Splits returns from assignments. Returns have implicit destinations.
+        if (m_return)
+        {
+            calls.back().dest = m_context->returnParameters()[0].get();
+        }
+        else
+        {
+            calls.back().dest = m_dest;
+        }
+
+        // Recursive type analysis for internal calls.
+        if (CALLTYPE->kind() == FunctionType::Kind::Creation)
+        {
+            calls.back().type = (&NEWTYPE->contractDefinition());
+        }
+        else
+        {
+            auto const* internalcall = dynamic_cast<FunctionDefinition const*>(
+                &CALLTYPE->declaration()
+            );
+            if (internalcall)
+            {
+                // TODO: reuse results?
+                Visitor nested(internalcall, M_DEPTH_LIMIT - 1);
+                for (auto child : nested.calls)
+                {
+                    if (child.is_retval)
+                    {
+                        calls.back().type = child.type;
+                    }
+                }
+
+            }
+        }
+
+        // Checks that new type analysis succeeded.
+        if (!calls.back().type)
+        {
+            throw runtime_error("AllocationSite failed to resolve new type.");
+        }
     }
 
     for (auto arg : _node.arguments())
@@ -105,6 +170,16 @@ bool NewCallSummary::Visitor::visit(Assignment const& _node)
     return false;
 }
 
+bool NewCallSummary::Visitor::visit(Return const& _node)
+{
+    ScopedSwap<bool> scope(m_return, true);
+    if (auto const* expr = _node.expression())
+    {
+        expr->accept(*this);
+    }
+    return false;
+}
+
 // -------------------------------------------------------------------------- //
 
 void NewCallGraph::record(SourceUnit const& _src)
@@ -119,12 +194,32 @@ void NewCallGraph::record(SourceUnit const& _src)
     auto contracts = ASTNode::filteredNodes<ContractDefinition>(_src.nodes());
     for (auto contract : contracts)
     {
+        if (contract->isLibrary() || contract->isInterface()) continue;
+    
         NewCallSummary summary(*contract);
         
         auto violations = summary.violations();
         m_violations.splice(m_violations.end(), violations);
 
-        m_vertices[contract] = summary.children();
+        m_vertices[contract] = {};
+        for (auto child : summary.children())
+        {
+            auto typedata = m_truetypes.find(child.dest);
+            if (typedata == m_truetypes.end())
+            {
+                m_truetypes[child.dest] = child.type;
+                m_vertices[contract].push_back(child);
+            }
+            else if (typedata->second == child.type)
+            {
+                m_vertices[contract].push_back(child);
+            }
+            else
+            {
+                // TODO: new violation type
+                m_violations.push_back(child);
+            }
+        }
 
         m_names[contract->name()] = contract;
     }
@@ -193,6 +288,18 @@ void NewCallGraph::analyze(NewCallGraph::Graph::iterator _neighbourhood)
     }
 
     m_reach[root] = cost;
+}
+
+ContractDefinition const& NewCallGraph::specialize(
+    VariableDeclaration const& _decl
+) const
+{
+    auto itr = m_truetypes.find(&_decl);
+    if ((itr == m_truetypes.end()) || (itr->second == nullptr))
+    {
+        throw runtime_error("Unable to find declaration: " + _decl.name());
+    }
+    return (*itr->second);
 }
 
 // -------------------------------------------------------------------------- //

@@ -26,10 +26,11 @@ namespace modelcheck
 
 FunctionBlockConverter::FunctionBlockConverter(
     FunctionDefinition const& _func,
-		CallState const& _statedata,
-		TypeConverter const& _types
+	CallState const& _statedata,
+	TypeConverter const& _types
 ): GeneralBlockConverter(
 	_func.parameters(),
+	_func.returnParameters(),
 	_func.body(),
 	_statedata,
 	_types,
@@ -37,15 +38,18 @@ FunctionBlockConverter::FunctionBlockConverter(
 	_func.isPayable()
 ), M_TYPES(_types)
 {
-	// TODO(scottwe): support multiple return types.
-	if (_func.returnParameters().size() > 1)
+	if (block_type() == BlockType::Operation)
 	{
-		throw runtime_error("Multiple return values not yet supported.");
-	}
-	else if (!_func.returnParameters().empty())
-	{
+		// TODO(scottwe): support multiple return types.
 		m_rv = _func.returnParameters()[0];
 	}
+}
+
+// -------------------------------------------------------------------------- //
+
+void FunctionBlockConverter::set_for(FunctionSpecialization const& _for)
+{
+	m_spec = &_for;
 }
 
 // -------------------------------------------------------------------------- //
@@ -54,13 +58,14 @@ void FunctionBlockConverter::enter(
     CBlockList & _stmts, VariableScopeResolver & _decls
 )
 {
-    if (m_rv && !m_rv->name().empty())
-    {
+	_decls.assign_spec(m_spec);
+	if (m_rv && !m_rv->name().empty())
+	{
 		_decls.record_declaration(*m_rv);
 		_stmts.push_back(make_shared<CVarDecl>(
 			M_TYPES.get_type(*m_rv), _decls.resolve_declaration(*m_rv)
-        ));
-    }
+		));
+	}
 }
 
 void FunctionBlockConverter::exit(
@@ -80,13 +85,21 @@ void FunctionBlockConverter::exit(
 
 bool FunctionBlockConverter::visit(Return const& _node)
 {
-	CExprPtr rv = nullptr;
-	if (_node.expression())
+	CExprPtr rv;
+	switch (block_type())
 	{
-        rv = expand(*_node.expression());
+	case BlockType::Action:
+		new_substmt<CReturn>(nullptr);
+		break;
+	case BlockType::Operation:
+		rv = expand(*_node.expression());
 		rv = FunctionUtilities::try_to_wrap(*m_rv->annotation().type, move(rv));
+		new_substmt<CReturn>(rv);
+		break;
+	case BlockType::Initializer:
+		new_substmt<CExprStmt>(expand(*_node.expression()));
+		break;
 	}
-    new_substmt<CReturn>(rv);
 	return false;
 }
 

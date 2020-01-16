@@ -7,6 +7,7 @@
 #pragma once
 
 #include <libsolidity/ast/AST.h>
+#include <libsolidity/modelcheck/utils/Function.h>
 #include <list>
 #include <set>
 #include <string>
@@ -19,6 +20,7 @@ namespace modelcheck
 {
 
 enum class VarContext { STRUCT, FUNCTION };
+enum class CodeType { SOLBLOCK, SHADOWBLOCK, INITBLOCK };
 
 /*
  * Maintains a hierarchy of scopes and their declaration names. Allows variable
@@ -30,7 +32,13 @@ class VariableScopeResolver
 public:
     // When false, the variable scope maps to user variables. Otherwise, acts as
     // a shadow scope for instrumentation variables.
-    VariableScopeResolver(bool _instrument = false);
+    VariableScopeResolver(CodeType _code_type = CodeType::SOLBLOCK);
+
+    // Associates the scope with some contract scope.
+    void assign_spec(FunctionSpecialization const* _spec);
+
+    // Returns all specialization data for the current function scope.
+    FunctionSpecialization const* spec() const;
 
     // Creates or destroys a variable scope.
     void enter();
@@ -52,7 +60,9 @@ public:
     static std::string rewrite(std::string _sym, bool _gen, VarContext _ctx);
 
 private:
-    bool const M_SHADOW;
+    CodeType const M_CODE_TYPE;
+
+    FunctionSpecialization const* m_spec;
 
     std::list<std::set<std::string>> m_scopes;
 

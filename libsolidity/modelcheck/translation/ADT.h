@@ -6,6 +6,7 @@
 #pragma once
 
 #include <libsolidity/ast/ASTVisitor.h>
+#include <libsolidity/modelcheck/analysis/AllocationSites.h>
 #include <libsolidity/modelcheck/analysis/Types.h>
 #include <list>
 #include <ostream>
@@ -30,9 +31,10 @@ public:
 	// declare is set, then the structure bodies are not generated.
     ADTConverter(
         ASTNode const& _ast,
+		NewCallGraph const& _newcalls,
 		TypeConverter const& _converter,
 		size_t _map_k,
-		bool _fwd_dcl
+		bool _forward_declare
     );
 
     // Prints each ADT declaration once, in some order.
@@ -40,18 +42,18 @@ public:
 
 protected:
 	bool visit(ContractDefinition const& _node) override;
+	bool visit(Mapping const& _node) override;
 
-	void endVisit(ContractDefinition const& _node) override;
-	void endVisit(Mapping const& _node) override;
+	void endVisit(VariableDeclaration const& _node) override;
 	void endVisit(StructDefinition const& _node) override;
 
 private:
 	ASTNode const& M_AST;
+	NewCallGraph const& M_CALLGRAPH;
 	TypeConverter const& M_CONVERTER;
 
 	size_t const M_MAP_K;
-
-	const bool M_FWD_DCL;
+	bool const M_FORWARD_DECLARE;
 
 	std::ostream* m_ostream = nullptr;
 

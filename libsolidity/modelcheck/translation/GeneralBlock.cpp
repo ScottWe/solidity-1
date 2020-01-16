@@ -12,6 +12,7 @@
 #include <libsolidity/modelcheck/utils/Function.h>
 #include <libsolidity/modelcheck/utils/General.h>
 #include <libsolidity/modelcheck/utils/Types.h>
+#include <algorithm>
 #include <stdexcept>
 
 using namespace std;
@@ -25,8 +26,29 @@ namespace modelcheck
 
 // -------------------------------------------------------------------------- //
 
+void BlockUtilities::add_value_handler(CBlockList & _block)
+{
+	auto const VALUE_SYM = CallStateUtilities::Field::Value;
+	auto const VALUE_FLD = CallStateUtilities::get_name(VALUE_SYM);
+	auto const VALUE = make_shared<CIdentifier>(VALUE_FLD, false)->access("v");
+
+	auto const PAID_SYM = CallStateUtilities::Field::Paid;
+	auto const PAID_FLD = CallStateUtilities::get_name(PAID_SYM);
+	auto const PAID = make_shared<CIdentifier>(PAID_FLD, false)->access("v");
+
+	auto const SELF = make_shared<CIdentifier>("self", true);
+	auto BAL = SELF->access(ContractUtilities::balance_member())->access("v");
+
+	auto CHECKS = make_shared<CBinaryOp>(PAID, "==", Literals::ONE);
+	auto CHANGE = CBinaryOp(BAL, "+=", VALUE).stmt();
+	_block.push_back(make_shared<CIf>(CHECKS, CHANGE, nullptr));
+}
+
+// -------------------------------------------------------------------------- //
+
 GeneralBlockConverter::GeneralBlockConverter(
-	std::vector<ASTPointer<VariableDeclaration>> const& _args,
+	vector<ASTPointer<VariableDeclaration>> const& _args,
+	vector<ASTPointer<VariableDeclaration>> const& _rvs,
 	Block const& _body,
 	CallState const& _statedata,
 	TypeConverter const& _types,
@@ -37,6 +59,7 @@ GeneralBlockConverter::GeneralBlockConverter(
  , M_TYPES(_types)
  , M_MANAGE_PAY(_manage_pay)
  , M_IS_PAYABLE(_is_payable)
+ , M_BLOCKTYPE(determine_block_type(_rvs))
 {
 	m_decls.enter();
 	for (auto const& arg : _args)
@@ -67,9 +90,16 @@ CExprPtr GeneralBlockConverter::expand(Expression const& _expr, bool _ref)
 
 // -------------------------------------------------------------------------- //
 
-CStmtPtr & GeneralBlockConverter::last_substmt()
+CStmtPtr GeneralBlockConverter::last_substmt()
 {
 	return m_substmt;
+}
+
+// -------------------------------------------------------------------------- //
+
+GeneralBlockConverter::BlockType GeneralBlockConverter::block_type() const
+{
+	return M_BLOCKTYPE;
 }
 
 // -------------------------------------------------------------------------- //
@@ -85,29 +115,10 @@ bool GeneralBlockConverter::visit(Block const& _node)
 	// Performs setup specific to the top-level block.
 	if (top_level_swap.old())
 	{
-		auto const VAL_FLD = CallStateUtilities::get_name(
-			CallStateUtilities::Field::Value
-		);
-		auto const PAY_FLD = CallStateUtilities::get_name(
-			CallStateUtilities::Field::Paid
-		);
 
-		auto const VAL = make_shared<CIdentifier>(VAL_FLD, false)->access("v");
-		auto const PAY = make_shared<CIdentifier>(PAY_FLD, false)->access("v");
 		if (M_MANAGE_PAY && M_IS_PAYABLE)
 		{
-			string const BAL_MEMBER = ContractUtilities::balance_member();
-			auto const self = make_shared<CIdentifier>("self", true);
-			auto BAL = self->access(BAL_MEMBER)->access("v");
-			auto CHG = CBinaryOp(BAL, "+=", VAL).stmt();
-			auto CHK = make_shared<CBinaryOp>(PAY, "==", Literals::ONE);
-			stmts.push_back(make_shared<CIf>(CHK, CHG, nullptr));
-		}
-		else if (M_MANAGE_PAY)
-		{
-			stmts.push_back(make_shared<CFuncCall>("sol_require", CArgList{
-				make_shared<CBinaryOp>(VAL, "==", Literals::ZERO), Literals::ZERO
-			})->stmt());
+			BlockUtilities::add_value_handler(stmts);
 		}
 		enter(stmts, m_decls);
 	}
@@ -214,9 +225,17 @@ bool GeneralBlockConverter::visit(Throw const& _node)
 	throw runtime_error("Throw statement not yet supported.");
 }
 
-bool GeneralBlockConverter::visit(EmitStatement const&)
+bool GeneralBlockConverter::visit(EmitStatement const& _node)
 {
-	// TODO(scottwe): warn unchecked; emit statements may be used to audit.
+	auto const& LOC = _node.eventCall().location();
+	auto const& SRC = LOC.source->source();
+	string event = SRC.substr(LOC.start, LOC.end - LOC.start);
+	event.erase(std::remove(event.begin(), event.end(), '\n'), event.end());
+
+	CFuncCallBuilder sol_emit_call("sol_emit");
+	sol_emit_call.push(make_shared<CStringLiteral>(event));
+	new_substmt<CExprStmt>(sol_emit_call.merge_and_pop());
+
 	return false;
 }
 
@@ -267,6 +286,30 @@ void GeneralBlockConverter::endVisit(Continue const&)
 void GeneralBlockConverter::endVisit(Break const&)
 {
 	new_substmt<CBreak>();
+}
+
+// -------------------------------------------------------------------------- //
+
+GeneralBlockConverter::BlockType GeneralBlockConverter::determine_block_type(
+	vector<ASTPointer<VariableDeclaration>> const& _rvs
+)
+{
+	if (_rvs.empty())
+	{
+		return BlockType::Action;
+	}
+	else if (_rvs.size() > 1)
+	{
+		throw runtime_error("Multiple return values not yet supported.");
+	}
+	else if (_rvs[0]->type()->category() == Type::Category::Contract)
+	{
+		return BlockType::Initializer;
+	}
+	else
+	{
+		return BlockType::Operation;
+	}
 }
 
 // -------------------------------------------------------------------------- //

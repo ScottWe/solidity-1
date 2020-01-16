@@ -27,7 +27,7 @@ class NewCallSummary
 public:
     // Types of violations.
     // - None:     the allocation is "safe"
-    // - Oprhaned: the allocation is not assigned to some state variable
+    // - Orphaned: the allocation is not assigned to some state variable
     // - Unbounded: the new operation may be called more than once
     enum class ViolationType { None, Orphaned, Unbounded };
 
@@ -38,6 +38,7 @@ public:
         FunctionDefinition const* context;
         FunctionCall const* callsite;
         VariableDeclaration const* dest;
+        bool is_retval;
         ViolationType status;
     };
     using CallGroup = std::list<NewCall>;
@@ -67,15 +68,19 @@ private:
     public:
         CallGroup calls;
 
-        Visitor(FunctionDefinition const* _context);
+        Visitor(FunctionDefinition const* _context, size_t _depth_limit);
 
     protected:
         bool visit(FunctionCall const& _node) override;
         bool visit(Assignment const& _node) override;
+        bool visit(Return const& _node) override;
 
     private:
+        size_t const M_DEPTH_LIMIT;
+
         FunctionDefinition const* m_context;
         VariableDeclaration const* m_dest = nullptr;
+        bool m_return = false;
     };
 };
 
@@ -117,7 +122,13 @@ public:
     // Performs a reverse lookup from contract name to contract address.
     Label reverse_name(std::string _name) const;
 
+    // Returns a more percise contract type for a given contract variable. This
+    // takes into account upcasting. Throws if the variable was not recorded, or
+    // if it was not of a contract type.
+    ContractDefinition const& specialize(VariableDeclaration const& _decl) const;
+
 private:
+    using VarTyping = std::map<VariableDeclaration const*, Label>;
     using Graph = std::map<Label, NewCallSummary::CallGroup>;
     using Reach = std::map<Label, size_t>;
     using Alias = std::map<std::string, Label>;
@@ -129,6 +140,7 @@ private:
     Graph m_vertices;
     Reach m_reach;
     Alias m_names;
+    VarTyping m_truetypes;
     NewCallSummary::CallGroup m_violations;
 };
 

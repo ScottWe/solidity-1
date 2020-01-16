@@ -5,6 +5,7 @@
  */
 
 #include "libsolidity/modelcheck/analysis/FunctionCall.h"
+#include <iostream>
 
 using namespace std;
 
@@ -20,7 +21,26 @@ namespace modelcheck
 FunctionCallAnalyzer::FunctionCallAnalyzer(FunctionCall const& _call)
 {
     m_args = _call.arguments();
-    _call.expression().accept(*this);
+
+    m_type = dynamic_cast<FunctionType const*>(
+        _call.expression().annotation().type
+    );
+	if (!m_type)
+	{
+		throw runtime_error("Function encountered without type annotations.");
+	}
+
+    if (m_type->hasDeclaration())
+    {
+        m_decl = dynamic_cast<FunctionDefinition const*>(
+            &m_type->declaration()
+        );
+    }
+
+    if (!m_context)
+    {
+        _call.expression().accept(*this);
+    }
 }
 
 // -------------------------------------------------------------------------- //
@@ -49,6 +69,25 @@ Identifier const* FunctionCallAnalyzer::id() const
     return m_id;
 }
 
+bool FunctionCallAnalyzer::is_super() const
+{
+    return (id() && (id()->name() == "super"));
+}
+
+FunctionType const& FunctionCallAnalyzer::type() const
+{
+    return (*m_type);
+}
+
+FunctionDefinition const& FunctionCallAnalyzer::decl() const
+{
+    if (!m_decl)
+    {
+		throw runtime_error("Function encountered without declaration.");
+    }
+    return (*m_decl);
+}
+
 // -------------------------------------------------------------------------- //
 
 bool FunctionCallAnalyzer::visit(MemberAccess const& _node)
@@ -61,7 +100,7 @@ bool FunctionCallAnalyzer::visit(MemberAccess const& _node)
     {
         m_value = move(m_last);
     }
-    else
+    else if (!m_context)
     {
         m_context = (&_node.expression());
     }
@@ -72,8 +111,17 @@ bool FunctionCallAnalyzer::visit(MemberAccess const& _node)
 
 bool FunctionCallAnalyzer::visit(FunctionCall const& _node)
 {
-    m_last = _node.arguments().front();
+    if (_node.arguments().empty())
+    {
+        m_last = nullptr;
+    }
+    else
+    {
+        m_last = _node.arguments().front();
+    }
+
     _node.expression().accept(*this);
+
     return false;
 }
 
