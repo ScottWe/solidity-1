@@ -39,7 +39,7 @@ contract Crowdsale {
 
     constructor(uint _goal) public {
         goal = _goal;
-        deadline = now + 365 day;
+        deadline = now + 365 days;
     }
 
     function invest() public payable {
