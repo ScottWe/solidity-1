@@ -64,11 +64,33 @@ never changes. We will see that this is not the case, as any client can
 in real smart contracts are often more subtle, and model checking is one way to
 detect these bugs.
 
+## Encoding the Property
+
+Let's start by formalizing the property. First we will need a specification
+language. This example uses the
+[VerX Specification Language](https://verx.ch/docs/spec.html) due to its support
+for linear temporal logic (LTL), and its similarity to the Solidity language:
+
+```
+always(
+    !(once(FUNCTION == Manager.openBank()))
+    =>
+    (BALANCE(Fund) == prev(BALANCE(Fund)))
+)
+```
+
+As with all LTL properties, we can construct a monitor to detects when the
+property is violated. The corresponding automaton is as follows:
+
+![](3_monitor.png)
+
+At this time, SmartACE do not automate property instrumentation. The next
+section describes how it could be done by hand. The reader less interested in
+these details may safely skip to the final section.
+
 ## Instrumenting the Model
 
-We will instrument the property by hand. In future releases of SmartACE, this
-instrumentation will be automated. To follow along, save the program as
-`fund.sol` and then run:
+To start, save the program as `fund.sol` and then run:
 
 ```
 path/to/solc fund.sol --bundle=Manager --c-model --output-dir=fund
@@ -119,18 +141,12 @@ model. After some bootstrapping, we can see `Manager` initialized:
 
 ```cpp
 smartace_log("[Initializing contract_0]");
-sender.v = rt_nd_range(3, 5, "sender");
+sender.v = nd_range(3, 5, "sender");
 value.v = 0;
-blocknum_tmp.v = nd_uint256_t("blocknum");
-sol_require(blocknum.v <= blocknum_tmp.v, 0);
-blocknum = blocknum_tmp;
-timestamp_tmp.v = nd_uint256_t("timestamp");
-sol_require(timestamp.v <= timestamp_tmp.v, 0);
-timestamp = timestamp_tmp;
+blocknum.v = nd_increase(blocknum.v, 0, "blocknum");
+timestamp.v = nd_increase(timestamp.v, 0, "timestamp");
 Init_Manager(&contract_0, sender, value, blocknum, timestamp, paid, origin);
 ```
-
-(*SW: `rt_` is an old acronym that made sense at the time. I think we should find something new. Perhaps just `nd_range` and `nd_byte`*).
 
 Each method prefixed by `nd_` is used to generate a non-deterministic value. In
 this code we construct `Manager` using a non-deterministic `msg.sender`,
@@ -149,16 +165,11 @@ Moving on, we enter a loop which simulates a sequence of transitions:
 smartace_log("[Entering transaction loop]");
 while (sol_continue()) {
     sol_on_transaction();
-    ((sender).v) = (rt_nd_range(3, 5, "sender"));
-    ((value).v) = (0);
-    ((blocknum_tmp).v) = (nd_uint256_t("blocknum"));
-    sol_require(((blocknum).v) <= ((blocknum_tmp).v), 0);
-    (blocknum) = (blocknum_tmp);
-    ((timestamp_tmp).v) = (nd_uint256_t("timestamp"));
-    sol_require(((timestamp).v) <= ((timestamp_tmp).v), 0);
-    (timestamp) = (timestamp_tmp);
-    uint8_t next_call = (rt_nd_range(0, 5, "next_call"));
-    sol_uint256_t pre = contract_1->model_balance;
+    sender.v = nd_range(3, 5, "sender");
+    value.v = 0;
+    blocknum.v = nd_increase(blocknum.v, 0, "blocknum");
+    timestamp.v = nd_increase(timestamp.v, 0, "timestamp");
+    uint8_t next_call = nd_range(0, 5, "next_call");
     switch (next_call) {
     case 0: {
         smartace_log("[Calling openFund on contract_0]");
@@ -197,7 +208,7 @@ while (sol_continue()) {
     sol_on_transaction();
     sol_uint256_t pre_balance = contract_1->model_balance; // Ghost var 2.
     /* ... */
-    uint8_t next_call = rt_nd_range(0, 5, "next_call");
+    uint8_t next_call = nd_range(0, 5, "next_call");
     switch (next_call) {
     case 0: {
         smartace_log("[Calling openFund on contract_0]");

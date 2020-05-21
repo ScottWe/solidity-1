@@ -28,7 +28,7 @@ Let's start with a *crowdsale* smart contract designed to raise `goal` funds by
 `deadline`. Clients may call `finish()` if the goal is reached by `deadline`,
 and `cancel()` if the goal is not reached by `deadline`.
 
-```
+```solidity
 contract Crowdsale {
     uint raised;
     uint goal;
@@ -39,7 +39,7 @@ contract Crowdsale {
 
     constructor(uint _goal) public {
         goal = _goal;
-        deadline = now + 365;
+        deadline = now + 365 day;
     }
 
     function invest() public payable {
