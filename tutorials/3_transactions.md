@@ -172,7 +172,7 @@ while (sol_continue()) {
     switch (next_call) {
     case 0: {
         smartace_log("[Calling openFund on contract_0]");
-        Method_Manager_FuncopenFund(&(contract_0), sender, value, blocknum, timestamp, paid, origin);
+        Manager_Method_openFund(&(contract_0), sender, value, blocknum, timestamp, paid, origin);
         smartace_log("[Call successful]");
         break;
     }
@@ -187,13 +187,9 @@ The method is determined by `next_call`. To instrument the contract, we must
 find the cases which corresponds to `Manager.openFund()`. This is easy if we
 understand the SmartACE naming conventions:
 
-  * A constructor is an unnamed method, which is mapped to `Init_Manager`.
-  * A fallback is an unnamed method, which is mapped to `Fallback_Manager`.
-  * A method, say `openFund`, is mapped to `Method_Manager_FuncopenFund`.
-
-(*SW: This example doesn't talk about inheritance. If contract `A` extends `B` and calls `B.f` we write `Method_B_for_A_funcf`.*)
-
-(*SW: I suggest `CONTRACT_Method(_For_OVERRIDE)_METHODNAME`, `CONTRACT_INIT`, and `CONTRACT_FALLBACK`. Modifiers will come before `_METHODNAME`.*).
+  * A constructor is an unnamed method, which is mapped to `Manager_Constructor`.
+  * A fallback is an unnamed method, which is mapped to `Manager_Fallback`.
+  * A method, say `openFund`, is mapped to `Manager_Method_openFund`.
 
 Our monitor is defined over transactions, so we can embed it in this loop using
 standard techniques:
