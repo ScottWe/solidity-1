@@ -60,11 +60,11 @@ contract Manager {
 }
 ```
 
-We want to verify that until `openFund()` is called, the `balance` of `fund`
-never changes. We will see that this is not the case, as any client can
-`claim()` ownership of `fund` from `Manager`. Unfortunately, ownership exploits
-in real smart contracts are often more subtle, and model checking is one way to
-detect these bugs.
+At first glance it may appear that the balance of fund will not change unless
+`openFund()` is called. This is because calls to `open()` are checked against
+the current owner. However, ownership exploits are an issue in
+[real smart contracts](https://blog.openzeppelin.com/on-the-parity-wallet-multisig-hack/).
+Let's use SmartACE to see if this invariant really holds.
 
 ## Encoding the Property
 
