@@ -79,16 +79,20 @@ always(
 )
 ```
 
-As with all LTL properties, we can construct a monitor to detects when the
-property is violated. The corresponding automaton is as follows:
+As with all LTL properties, we can construct a monitor to detect when the
+property is violated. For simplicity we use the predicate language:
+
+  * `called`: in the last transaction, `Manager.openBank` was called.
+  * `unchanged`: in the last transaction, the balance of `Fund` was unchanged.
+
+The regular expression for this monitor is  `unchanged* called True*`. The
+corresponding automaton is as follows:
 
 ![](3_monitor.png)
 
-(*SW: This monitor is not "quite" the property. Formally, we think of a transaction as being a relation between two states but we don't have a notation to talk about this. Instead, I've partitioned the calls into methods which change the balance of `Manager.fund` and those which do not.*)
-
-At this time, SmartACE do not automate property instrumentation. The next
-section describes how it could be done by hand. The reader less interested in
-these details may safely skip to the final section.
+At this time, SmartACE does not automate property instrumentation. The next
+section describes instrumentation is done by hand. The reader less interested in
+these details can safely skip to the final section.
 
 ## Instrumenting the Model
 
