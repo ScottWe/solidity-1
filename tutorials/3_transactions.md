@@ -8,13 +8,15 @@ categories: [smartace, verification, model checking]
 
 # 3. Debugging Smart Contracts with SmartACE
 
-Solidity makes it easy to instrument pre- and post-conditions with `require` and
-`assert` statements. As shown in the [previous tutorial](2_getting_started.md),
-its also reasonable to instrument checks for representation invariants. However,
-for complex properties, it is often easier to instrument the model directly.
+Solidity supports pre- and post-conditions through the `require` and `assert`
+statements. As shown in the [previous tutorial](2_getting_started.md), these are
+sufficient for simple representation invariants. However, for more complex
+properties, especially between two or more contracts, manual instrumentation
+becomes difficult and error-prone.
 
-In this tutorial we will see how SmartACE models map-free smart contracts, and
-then learn how to instrument and debug requirements on these models.
+In this tutorial, we show how smart contract invariants can be expressed in
+temporal logic, converted into monitors, and then instrumented mechanically.
+This instrumentation will be automated in future versions of SmartACE.
 
 This tutorial requires [Seahorn and clang-format](1_installation.md).
 
