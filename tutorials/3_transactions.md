@@ -72,7 +72,7 @@ The first step in encoding the property is to state it precisely. Our logic of
 choice is past linear temporal logic (pLTL). We start with an informal statement
 of the property.
 
-> It is *always* the case that if `openBank()` is *not* called even *once*, then
+> It is *always* the case that if `openFund()` is *not* called even *once*, then
 > the balance of `Manager.fund` *prior to* and after the last transaction
 > remains unchanged.
 
@@ -85,7 +85,7 @@ corresponding pLTL operators. Our property becomes:
 
 ```
 always(
-    !(once(FUNCTION == Manager.openBank()))
+    !(once(FUNCTION == Manager.openFund()))
     =>
     (BALANCE(Fund) == prev(BALANCE(Fund)))
 )
@@ -94,7 +94,7 @@ always(
 To detect property violations, we convert the property into a monitor. For
 brevity, we introduce the following predicates:
 
-  * `called := (FUNCTION == Manager.openBank())`.
+  * `called := (FUNCTION == Manager.openFund())`.
   * `unchanged := (BALANCE(Fund) == prev(BALANCE(Fund)))`
 
 The regular expression for the monitor is  `unchanged* called True*`. The
@@ -110,7 +110,7 @@ SmartACE. The readers less interested in these details can safely skip to the
 ## Instrumenting the Model
 
 We can encode the monitor using three ghost variables and a single assertion.
-One ghost variable (`called_openFund`) will track when `Bank.openFund` is
+One ghost variable (`called_openFund`) will track when `Fund.openFund()` is
 called. The second and third ghost variables (`pre_Fund_balance` and
 `post_sum_balance`) will store the values of `BALANCE(Fund)` both before and
 after each transaction. We will assert that `called_openFund` implies
@@ -254,15 +254,14 @@ while (sol_continue()) {
 
 ```
 
-Now if we run `make verify` we will see that the property is violated.
-
 ## Debugging the Contract
 
-When `Seahorn` detects that an assertion can be violated, it can generate a
+If we run `make verify` on the instrumented contract, we will see that the
+property does not hold. When `Seahorn` detects a violation, it generates a
 counterexample. This counterexample resolves all non-determinism with concrete
-values, and terminates in an assertion failure. Thankfully, `Seahorn` provides
-these counterexamples are LLVM programs. We can link it against our executable
-model to produce a debuggable trace (a witness).
+values, and drives the program to an assertion failure. Thankfully, `Seahorn`
+provides these counterexamples as LLVM programs. We can link a counterexample
+against our executable model to produce a debuggable trace (a witness).
 
 In practice, we could analyze this trace using a debugger such as `gdb`.
 However, in this example, it is sufficient to read a trace log from the witness.
@@ -275,37 +274,63 @@ Let's reconfigure our example with logging, and then build the witness:
 This gives the trace:
 
 ```
-[Initializing contract_0]
+[Constructing contract_0 and children]
 sender [uint8]: 3
 blocknum [uint256]: 0
 timestamp [uint256]: 0
-[Entering transaction loop]
+[Entering transaction() loop]
 sender [uint8]: 3
 blocknum [uint256]: 0
 timestamp [uint256]: 0
 next_call [uint8]: 1
-[Calling claim on contract_1]
+[Calling claim() on contract_1]
 [Call successful]
 sender [uint8]: 3
 blocknum [uint256]: 0
 timestamp [uint256]: 0
 next_call [uint8]: 2
-[Calling open on contract_1]
+[Calling open() on contract_1]
 [Call successful]
 sender [uint8]: 3
 blocknum [uint256]: 0
 timestamp [uint256]: 0
 next_call [uint8]: 4
-[Calling deposit on contract_1]
+[Calling deposit() on contract_1]
 value [uint256]: 1
 [Call successful]
 [sea] __VERIFIER_error was executed
 ```
 
-If we follow through this trace, we can see a single client `claim`:
+At first this counterexample might seem surprising. No client should be able to
+call `open()` directly. However, this is precisely what happens. To figure out
+why, we can log the owner of `contract_1` on each iteration of the transaction
+loop. We also suppress the block number and timestamp:
 
-  1. Acquire ownership of `fund` through `claim`.
-  2. Transition `fund` to an accepting state through `open`.
-  3. Move a single Ether into `fund` through `deposit`.
+```
+[Constructing contract_0 and children]
+sender [uint8]: 3
+[Entering transaction() loop]
+=> owner of contract_1: 1
+sender [uint8]: 3
+next_call [uint8]: 1
+[Calling claim() on contract_1]
+[Call successful]
+=> owner of contract_1: 3
+sender [uint8]: 3
+next_call [uint8]: 2
+[Calling open() on contract_1]
+[Call successful]
+=> owner of contract_1: 3
+sender [uint8]: 3
+next_call [uint8]: 4
+[Calling deposit() on contract_1]
+value [uint256]: 1
+[Call successful]
+[sea] __VERIFIER_error was executed
+```
 
-This is the counterexample we suspected, and it is not spurious.
+We can now see how this is possible. When `Manager` is constructed, it creates a
+new fund, whose owner is `Manager`. This aligns with the first owner. Client 3
+then `claim()` and takes ownership. This aligns with the second owner. From
+here, client 3 is free to `open()` the contract, and then `deposit()` a single
+Ether. The balance of `Fund` has changed without a call to `openFund()`.
