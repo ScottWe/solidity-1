@@ -68,10 +68,20 @@ Let's use SmartACE to see if this invariant really holds.
 
 ## Encoding the Property
 
-Let's start by formalizing the property. First we will need a specification
-language. This example uses the
-[VerX Specification Language](https://verx.ch/docs/spec.html) due to its support
-for linear temporal logic (LTL), and its similarity to the Solidity language:
+The first step in encoding the property is to state it precisely. Our logic of
+choice is past linear temporal logic (pLTL). We start with an informal statement
+of the property.
+
+> It is *always* the case that if `openBank()` is *not* called even *once*, then
+> the balance of `Manager.fund` *prior to* and after the last transaction
+> remains unchanged.
+
+We can formalize this using the
+[VerX Specification Language](https://verx.ch/docs/spec.html). This is a smart
+contract specification language, where `FUNCTION` refers to the function called
+in the last transaction, while `prev()` is an operator which returns the value
+of a variable before the last transaction. `always` and `once` are the
+corresponding pLTL operators. Our property becomes:
 
 ```
 always(
@@ -81,20 +91,21 @@ always(
 )
 ```
 
-As with all LTL properties, we can construct a monitor to detect when the
-property is violated. For simplicity we use the predicate language:
+To detect property violations, we convert the property into a monitor. For
+brevity, we introduce the following predicates:
 
-  * `called`: in the last transaction, `Manager.openBank` was called.
-  * `unchanged`: in the last transaction, the balance of `Fund` was unchanged.
+  * `called := (FUNCTION == Manager.openBank())`.
+  * `unchanged := (BALANCE(Fund) == prev(BALANCE(Fund)))`
 
-The regular expression for this monitor is  `unchanged* called True*`. The
+The regular expression for the monitor is  `unchanged* called True*`. The
 corresponding automaton is as follows:
 
-![](3_monitor.png)
+![](3_monitor.svg)
 
-At this time, SmartACE does not automate property instrumentation. The next
-section describes instrumentation is done by hand. The reader less interested in
-these details can safely skip to the final section.
+The next section walks through instrumenting the model with the monitor. This
+procedure is currently manual, but will be automated in a future release of
+SmartACE. The readers less interested in these details can safely skip to the
+[final section](#debugging-the-contract).
 
 ## Instrumenting the Model
 
@@ -245,7 +256,7 @@ while (sol_continue()) {
 
 Now if we run `make verify` we will see that the property is violated.
 
-## Debugging the Model
+## Debugging the Contract
 
 When `Seahorn` detects that an assertion can be violated, it can generate a
 counterexample. This counterexample resolves all non-determinism with concrete
