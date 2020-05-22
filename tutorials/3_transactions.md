@@ -94,7 +94,7 @@ always(
 To detect property violations, we convert the property into a monitor. For
 brevity, we introduce the following predicates:
 
-  * `called := (FUNCTION == Manager.openFund())`.
+  * `called := (FUNCTION == Manager.openFund())`
   * `unchanged := (BALANCE(Fund) == prev(BALANCE(Fund)))`
 
 The regular expression for the monitor is  `unchanged* called True*`. The
@@ -107,22 +107,18 @@ procedure is currently manual, but will be automated in a future release of
 SmartACE. The readers less interested in these details can safely skip to the
 [final section](#debugging-the-contract).
 
-## Instrumenting the Model
+## Understanding the Model
 
-We can encode the monitor using three ghost variables and a single assertion.
-One ghost variable (`called_openFund`) will track when `Fund.openFund()` is
-called. The second and third ghost variables (`pre_Fund_balance` and
-`post_sum_balance`) will store the values of `BALANCE(Fund)` both before and
-after each transaction. We will assert that `called_openFund` implies
-`pre_Fund_balance` equals `post_Fund_balance`. 
-
-To start, save the program as `fund.sol` and then run:
+Before we instrument the SmartACE model, we take a detour to understand its
+structure. Readers only interested in the monitor can
+[skip ahead](#instrumenting-the-model). Otherwise, start by saving `fund.sol`
+and then running:
 
 ```
 path/to/solc fund.sol --bundle=Manager --c-model --output-dir=fund
 ```
 
-We will start by inspecting the SmartACE artifacts. You should see:
+This generates several artifacts:
 
   * `CMakeLists.txt`: generates make targets for fuzzing, symbolic execution,
     simulation, and model checking.
@@ -133,68 +129,16 @@ We will start by inspecting the SmartACE artifacts. You should see:
   * `libverify/`: runtime libraries which define how require, assert, etc., are
     handled in each model.
 
-To instrument the model, we will need to modify `cmodel.c`. The code is not
-human-readable but we can improve this with `clang-format`:
+To understand the model, we will focus on `cmodel.c`. This file is unformatted,
+but we can improve its presentation with `clang-format`:
 
   * `mdkir build ; cd build`
   * `cmake .. -DSEA_PATH=/path/to/seahorn/bin`
   * `make run-clang-format`
 
-Now open `cmodel.c`. Let's start by declaring our ghost variables at the top of
-the file. We will use the Solidity type wrappers provided by `primitives.h`, and
-the ghost variable macro found in `libverify`. For now `GHOST_VAR` is a
-placeholder, but will be used for analysis specific
-[attributes](https://clang.llvm.org/docs/AttributeReference.html) in a future
-release of SmartACE.
-
-```cpp
-GHOST_VAR int called_openFund;
-GHOST_VAR sol_uint256_t pre_balance;
-GHOST_VAR sol_uint256_t post_balance;
-```
-
-We can set `call_openFund` on entry to `openFund`. This is sufficient, as there
-is a single instance of `Manager`. As for `pre_` and `post_balance`, we must set
-these variables at the beginning and end of each transaction. To find `openFund`
-we appeal to the SmartACE naming conventions:
-
-  * A constructor is an unnamed method, which is mapped to `Manager_Constructor`.
-  * A fallback is an unnamed method, which is mapped to `Manager_Fallback`.
-  * A method, say `openFund`, is mapped to `Manager_Method_openFund`.
-
-Using this, we find `openFund` at line 77 and rewrite it as:
-
-```cpp
-void Manager_Method_openFund(struct Manager *self, /* Blockchain State */) {
-    called_openFund = 1;
-    Fund_Method_open(&self->user_fund, /* Blockchain State */);
-}
-
-```
-
-We then move on to the entry-point, `void run_model(void)`, at line 85. We must
-identify the variable which maps to `Manager.fund`, and then locate the code
-which executes transactions. If we move ahead to line 102 we can see where
-`Manager` is constructed:
-
-```cpp
-smartace_log("[Initializing contract_0]");
-sender.v = nd_range(3, 5, "sender");
-value.v = 0;
-blocknum.v = nd_increase(blocknum.v, 0, "blocknum");
-timestamp.v = nd_increase(timestamp.v, 0, "timestamp");
-Init_Manager(&contract_0, sender, value, blocknum, timestamp, paid, origin);
-
-```
-
-To summarize briefly, each method prefixed by `nd_` selects a value
-non-deterministically. These values are used to model an arbitrary `msg.sender`,
-and an increasing `block.number` and `block.timestamp`. An attentive reader may
-notice that we restrict addresses to 3 and 4. The importance of this choice, and
-its impact on completeness, are the topic of the next tutorial. For now we can
-think of this as a bounded model with two clients, so at the least, our
-verification is sound. Regardless, we have found the declaration for `Manager`,
-and by referring to line 8, we also learn how to access `balance`:
+We highlight four parts of the model: the contract encoding, the method
+encoding, the bundle construction, and the "transaction loop". We start at line
+8, with the contract encoding.
 
 ```cpp
 struct Fund {
@@ -211,9 +155,41 @@ struct Manager {
 };
 ```
 
-Members prefixed by `user_` are taken from the smart contract definition while
-members prefixed by `model_` are generated by SmartACE. To get the balance of
-`Fund` we must access `contract_0.user_fund.model_balance`.
+A c-struct is generated for each contract. All Solidity primitive types are
+wrapped by singleton c-struts in `primitives.h`. Members prefixed by `user_`
+are taken from the smart contract definition, while members prefixed by `model_`
+are generated by SmartACE. If a contract is constructed with `new`, it is nested
+inside the contract which calls `new`. To illustrate, if we defined a contract
+`struct Manager contract_0`, then the balance of `fund` is
+`contract_0.user_fund.model_address`.
+
+Between lines 21 to 86, we then find the encoding of each method. To avoid name
+collisions, SmartACE renames each method according to the following rules:
+
+  * The constructor of contract `Manager` maps to `Manager_Constructor`.
+  * The fallback method of `Manager` maps to `Manager_Fallback`.
+  * The method `openFund` of `Manager` maps to `Manager_Method_openFund`.
+
+We then move on to the entry-point, `void run_model(void)`, at line 85. After
+some setup code, we find at line 102 the initialization of `Manager`, and in
+turn, `Manager.fund`.
+
+```cpp
+smartace_log("[Initializing contract_0 and children]");
+sender.v = nd_range(3, 5, "sender");
+value.v = 0;
+blocknum.v = nd_increase(blocknum.v, 0, "blocknum");
+timestamp.v = nd_increase(timestamp.v, 0, "timestamp");
+Init_Manager(&contract_0, sender, value, blocknum, timestamp, paid, origin);
+```
+
+To summarize briefly, each method prefixed by `nd_` selects a value
+non-deterministically. These values are used to model an arbitrary `msg.sender`,
+and an increasing `block.number` and `block.timestamp`. An attentive reader may
+notice that we restrict addresses to 3 and 4. The importance of this choice, and
+its impact on completeness, are the topic of the next tutorial. For now we can
+think of this as a bounded model with two clients, so at the least, our
+verification is sound.
 
 At line 108 we then find the "transaction loop" which simulates a sequence of
 transitions:
@@ -236,22 +212,61 @@ while (sol_continue()) {
 }
 ```
 
-The `Seahorn` implementation of `sol_continue` always returns `true`, so the
-loop runs forever. On each iteration, a method is called non-deterministically.
-The method is determined by `next_call`. We instrument the final ghost
-variables, and the assertion as follows:
+The methods `sol_continue()` and `sol_on_transaction()` are runtime hooks
+provided by `libverify/`. For `Seahorn`, `sol_continue()` is alway true while
+`sol_on_transaction` is a no-op. This means that the loop runs forever. On each
+iteration, a method is selected non-deterministically, and then executed with
+non-deterministic arguments. The simulation ends if an assertion fails.
+
+## Instrumenting the Model
+
+We can encode the monitor using three ghost variables and a single assertion.
+We start by declaring each variable at the beginning of `cmodel.c`.
 
 ```cpp
-while (sol_continue()) {
-    /* ... Method selection ... */
-    pre_balance = contract_0.user_fund.user_balances;
-    switch (next_call) {
-    /* ... Method call ... */
-    }
-    post_balance = contract_0.user_fund.user_balances;
-    sol_assert(called_openFund || pre_balance.v == post_balance.v, 0);
-}
+GHOST_VAR int called_openFund;
+GHOST_VAR sol_uint256_t pre_balance;
+GHOST_VAR sol_uint256_t post_balance;
+```
 
+`called_openFund` tracks when `Fund.openFund()` is called. `pre_Fund_balance`
+and `post_Fund_balance` store the values of `BALANCE(FUND)` before and after
+each transaction.  For now `GHOST_VAR` is a placeholder, but will be used for
+analysis specific
+[attributes](https://clang.llvm.org/docs/AttributeReference.html) in a future
+release of SmartACE.
+
+We return to `Manager_Method_openFund` on line 77, and set `called_openFund` on
+entry. This is sufficient, as there is a single instance of `Manager`.
+
+```cpp
+void Manager_Method_openFund(struct Manager *self, /* Blockchain State */) {
+    called_openFund = 1;
+    Fund_Method_open(&self->user_fund, /* Blockchain State */);
+}
+```
+
+We then return to the transaction loop at line 108. We capture the value of
+`contract_1.model_balance` before and after each transaction. At the end of each
+iteration, we assert that `unchanged` is true, or that `called` has been
+observed at least once.
+
+```cpp
+smartace_log("[Entering transaction loop]");
+while (sol_continue()) {
+    sol_on_transaction();
+    /* ... Select non-deterministic blockchain state ... */
+    uint8_t next_call = nd_range(0, 5, "next_call");
+    switch (next_call) {
+    case 0: {
+        smartace_log("[Calling openFund on contract_0]");
+        Manager_Method_openFund(&(contract_0), /* Blockchain state */);
+        smartace_log("[Call successful]");
+        break;
+    }
+    /* ... Other methods ... */
+    }
+}
 ```
 
 ## Debugging the Contract
@@ -278,7 +293,7 @@ This gives the trace:
 sender [uint8]: 3
 blocknum [uint256]: 0
 timestamp [uint256]: 0
-[Entering transaction() loop]
+[Entering transaction loop]
 sender [uint8]: 3
 blocknum [uint256]: 0
 timestamp [uint256]: 0
@@ -309,7 +324,7 @@ loop. We also suppress the block number and timestamp:
 ```
 [Constructing contract_0 and children]
 sender [uint8]: 3
-[Entering transaction() loop]
+[Entering transaction loop]
 => owner of contract_1: 1
 sender [uint8]: 3
 next_call [uint8]: 1
