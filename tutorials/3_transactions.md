@@ -1,12 +1,12 @@
 ---
 layout: post
-title: "3. Debugging Smart Contracts for Functional Correctness"
+title: "3. Debugging Smart Contracts with SmartACE"
 subtitle: "Fixing Smart Contracts with SmartACE"
 date: 2020-05-19 21:00:00
 categories: [smartace, verification, model checking]
 ---
 
-# 3. Debugging Smart Contracts for Functional Correctness
+# 3. Debugging Smart Contracts with SmartACE
 
 Solidity makes it easy to instrument pre- and post-conditions with `require` and
 `assert` statements. As shown in the [previous tutorial](2_getting_started.md),
