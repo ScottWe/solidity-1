@@ -34,9 +34,6 @@ contract Crowdsale {
     uint goal;
     uint deadline;
 
-    // bool finished;
-    // bool canceled;
-
     constructor(uint _goal) public {
         goal = _goal;
         deadline = now + 365 days;
@@ -49,17 +46,11 @@ contract Crowdsale {
 
     function finish() public {
         require(address(this).balance >= goal);
-        // finished = true;
     }
 
     function cancel() public {
         require(address(this).balance < goal && now > deadline);
-        // canceled = true;
     }
-
-    // function repOK() public view {
-    //     assert(!(finished && canceled));
-    // }
 }
 ```
 
@@ -80,9 +71,44 @@ We can instrument this by:
   2. Adding a public method which asserts that both ghost variables are never
      true at the same time.
 
-This instrumentation is given by the comments. In later tutorials we will look
-at properties which are infeasible to instrument at the Solidity level. Save the
-uncommented code as `crowdsale.sol`.
+The instrumented contract is given below. In later tutorials we will learn to
+mechanically instrument smart contracts from temporal specification. For now,
+save the instrumented contract as `crowdsale.sol`.
+
+```solidity
+contract Crowdsale {
+    uint raised;
+    uint goal;
+    uint deadline;
+
+    bool finished; // Instrumented.
+    bool canceled; // Instrumented.
+
+    constructor(uint _goal) public {
+        goal = _goal;
+        deadline = now + 365 days;
+    }
+
+    function invest() public payable {
+        require(now <= deadline);
+        raised += msg.value;
+    }
+
+    function finish() public {
+        require(address(this).balance >= goal);
+        finished = true; // Instrumented.
+    }
+
+    function cancel() public {
+        require(address(this).balance < goal && now > deadline);
+        canceled = true; // Instrumented.
+    }
+
+    function repOK() public view {
+        assert(!(finished && canceled)); // Instrumented.
+    }
+}
+```
 
 ## Generating a SmartACE Model
 
