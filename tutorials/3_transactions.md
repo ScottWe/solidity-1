@@ -247,14 +247,15 @@ void Manager_Method_openFund(struct Manager *self, /* Blockchain State */) {
 ```
 
 We then return to the transaction loop at line 108. We capture the value of
-`contract_1.model_balance` before and after each transaction. At the end of each
-iteration, we assert that `unchanged` is true, or that `called` has been
+`contract_1->model_balance` before and after each transaction. At the end of
+each iteration, we assert that `unchanged` is true, or that `called` has been
 observed at least once.
 
 ```cpp
 smartace_log("[Entering transaction loop]");
 while (sol_continue()) {
     sol_on_transaction();
+    pre_balance = contract_1->model_balance;
     /* ... Select non-deterministic blockchain state ... */
     uint8_t next_call = nd_range(0, 5, "next_call");
     switch (next_call) {
@@ -266,6 +267,8 @@ while (sol_continue()) {
     }
     /* ... Other methods ... */
     }
+    post_balance = contract_1->model_balance;
+    sol_assert(called_openFund || pre_balance.v == post_balance.v, 0);
 }
 ```
 
