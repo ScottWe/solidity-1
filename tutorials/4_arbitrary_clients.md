@@ -134,7 +134,59 @@ The next two sections take a closer look at how SmartACE automates local
 reasoning. A reader who is more interested in the example property can safely
 skip to the [final section](#proving-the-correctness-of-fund-and-manager).
 
-## Checking Topologies from Program Syntax
+## Topology Checking through Program Syntax
+
+Let's take a closer look at how we constructed the abstract address domain. At a
+high level, we exploited syntactic patterns in each method's source code. We
+then drew conclusions about the client interactions. In fact, these patterns
+expose the underlying network topology, as we will see in the next tutorial. For
+now, we will describe these patterns explicitly, and show that they are
+applicable to many smart contracts.
+
+The patterns are as follows:
+
+### 1. Equality is the only address relation.
+
+Addresses must be unordered. This disallows many topologies, such as linear
+orders. Thankfully, Solidity was designed for wealth transfer between arbitrary
+parties, so this restriction is met by major Ethereum protocols such as the
+[ERC-20](https://eips.ethereum.org/EIPS/eip-20) and the
+[ERC-721](https://eips.ethereum.org/EIPS/eip-721).
+
+### 2. Address operations are never used.
+
+Addresses must also be unstructured. This disallows other topologies, such as
+rings and trees. While such topologies can have uses in smart contracts, they
+are
+[discouraged in relevant examples](https://solidity.readthedocs.io/en/v0.5.3/solidity-by-example.html).
+
+### 3. Address casts are never used.
+
+This follows from the first two restrictions. Address casting is used to apply
+arithmetic operators and relations to address values.
+
+### 4. Addresses must come from inputs or named state variables.
+
+This ensures that every transactional address footprint is bounded. In practice,
+it prevents iteration over addresses, such as in the following example:
+
+```
+contract UnboundedFootprintExample {
+    // ...
+    function bad(address payable[] _unboundedClients) public {
+        for (uint i = 0; i < _unboundedclients.length; i++) {
+            applyTo(_unboundedClients[i]);
+        }
+    }
+    // ...
+}
+```
+
+Solidity
+[best practices](https://solidity.readthedocs.io/en/v0.6.8/security-considerations.html#gas-limit-and-loops)
+already warn against unbounded loops. Unbounded loops require unbounded gas,
+which is [impossible in Ethereum](https://ethgasstation.info/blog/gas-limit/).
+As for bounded loops, we can unroll them prior to analysis.
 
 ## Restricting Addresses in SmartACE
 
