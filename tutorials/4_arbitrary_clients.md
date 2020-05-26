@@ -139,3 +139,30 @@ skip to the [final section](#proving-the-correctness-of-fund-and-manager).
 ## Restricting Addresses in SmartACE
 
 ## Proving the Correctness of `Fund` and `Manager`
+
+As before, we can run `make verify` to obtain a proof certificate. The
+[certificate](https://arieg.bitbucket.io/pdf/hcvs17.pdf) is given in the form
+of an inductive program invariant. Using the invariant, we can prove that along
+any path of the program, every assertion holds. Unfortunately, the invariant is
+given with respect to LLVM-bytecode. SmartACE does not yet offer tooling to make
+the certificate more readable. Interpreting the certificate requires inspecting
+the LLVM-bytecode, and then mapping the registers back to variables. You can
+take it on good faith that the certificate states:
+
+  1. `Manager.fund.isOpen => called_openFund`
+  2. `Manager.fund.owner == 1`
+
+Lemma one is straight forward. It states that whenever the guard variable for
+`Manager.fund.deposit()` is set, then `Manager.openFund()` has been called. We
+know that `deposit()` is the only payable method of `Fund`, so the lemma implies
+our property. However, this lemma does not ensure that other clients cannot call
+`Manager.fund.open()`. It is only inductive relative to lemma two.
+
+Lemma two is about addresses, so we must take more care in interpreting it. From
+the previous section, we know that `0` maps to `address(0)`, `1` maps to
+`address(Manager)`, and `2` maps to `address(Fund)`. Then we can read lemma two
+as `Manager.fund.owner == address(Manager)`. This means that the ownership of
+`Manager.fund` is invariant to any sequence of transactions from any sequence of
+arbitrary clients (i.e., addresses `3` and `4`). We know that `Manager` cannot
+start a transaction, and that only `Manager.fund.owner` can call
+`Manager.fund.open()`, so this lemma blocks all counterexamples to lemma one.
