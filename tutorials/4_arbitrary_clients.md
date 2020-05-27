@@ -190,6 +190,36 @@ As for bounded loops, we can unroll them prior to analysis.
 
 ## Restricting Addresses in SmartACE
 
+When the above patterns hold, SmartACE will compute an abstract address domain.
+In theory, we need one address for each distinguishable address, otherwise known
+as a *client equivalence class*. In theory, there is one class for each smart
+contract and one class for every arbitrary transactional input. Constants and
+state variables as not so simple. In theory there is a class for each constant
+and each state variable, along with their intersections with any other class.
+For example, a smart contract address may be a constant and also used as a state
+variable.
+
+However, for the `Manager` bundle we ended up with linearly many addresses,
+despite the presence of constants and state variables. Implicitly we made the
+following observations. First, we know that each constant is unique, therefore
+intersects with a single client or a single contract in any viable execution. We
+decide this intersection at the start of the model. We make a similar reduction
+for state variables by tracking the active equivalence class throughout the
+execution.
+
+Therefore, we require one address for each smart contract, one address for each
+transactional input, one address for each state variable, and one address for
+each constant.
+
+### Encoding the Addresses in SmartACE
+
+SmartACE encodes these addresses in a consistent way. The address `0` is always
+the constant `address(0)`. The addresses immediately following `0` are contract
+addresses. The remaining addresses are arbitrary clients, state variable
+placeholders, and constant placeholders in any order. For non-zero constants, we
+non-deterministically assign it a unique address. As non-zero constants are
+uncommon in real smart contracts, this often yields a deterministic assignment.
+
 ## Proving the Correctness of `Fund` and `Manager`
 
 As before, we can run `make verify` to obtain a proof certificate. The
