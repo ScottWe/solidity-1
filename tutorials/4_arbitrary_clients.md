@@ -9,27 +9,29 @@ categories: [smartace, verification, model checking, local reasoning]
 # 4. Verifying Client Properties in SmartACE
 
 In our [previous tutorial](3_transactions.md), we used SmartACE to identify
-ownerships exploit in a simple smart contract. We concluded the post by fixing
-the bug, and proving its absence for executions of two clients. In practice, we
-would like to prove that the property now holds for any number of clients. This
-is known as the parameterized model checking problem, and in SmartACE, we solve
-it through local reasoning.
+ownership exploits in a simple smart contract. We concluded the tutorial by
+fixing the bug, and proving its absence for executions with two clients.
+However, a real developer would want to verify the property holds for any
+number of clients. This is known as the parameterized model checking problem,
+and in SmartACE, we solve it through local reasoning.
 
-Informally, the parameterized model checking problem asks if a property about
-clients is invariant for any number of clients. Local reasoning allows us to
-solve the parameterized model checking problem with only a fixed number of
-clients. In this tutorial, we will return to the `Fund` and `Manager`
+Informally, the parameterized model checking problem asks whether a property
+about clients is invariant for any number of clients. Local reasoning allows us
+to reduce the parameterized model checking problem to a model with a fixed
+number of clients. In this tutorial, we will return to the `Fund` and `Manager`
 [example](3_transactions.md), and show that its proof certificate extends to any
-number of clients. In later tutorials we will extend our technique to clients
-which store data in mappings.
+number of clients. In the following tutorials, we will extend our technique to
+contracts with mappings of client data.
 
 ## The Contract and Property
 
-We now return to the `Manager` bundle. In this new version, we have added an
-`ownerOnly()` modifier to the protected interfaces of `Fund`. We have replaced
-`claim()` with `releaseTo(address _new)`, so that ownership must be passed on
-by the previous owner. As before, the fund should remain closed until
-`Manager.openFund()` is called.
+We now return to the `Manager` bundle given below. As before, we have two
+smart contracts: `Fund` and `Manager`. The `Manager` constructs a new `Fund`,
+for which it is is initially its owner. The `Manager` exposes a single method,
+`openFund()`, which allows clients to deposit Ether into `Fund`. To fix the
+ownership exploit in the previous example, we have added an `ownerOnly()`
+modifier to the protected interfaces of `Fund`, and have replaced `claim()` with
+`releaseTo(_new)` so that `Manager` must approve ownership transfers.
 
 ```solidity
 contract Fund {
@@ -73,23 +75,24 @@ always(
 ```
 
 We then construct a monitor from the property. A more detailed analysis is
-given in the [previous tutorial](3_transactions.md).
+found in the [previous tutorial](3_transactions.md).
 
 ## Restricting the Addresses of `Fund` and `Manager`
 
-Let's motivate SmartACE's local reasoning techniques with an example. We will
-reduce the `Manager` bundle to a fixed number of addresses, and show that if
-the original bundle has a counterexample, so does this new bundle. In the
-general case, Solidity addresses are both a data domain, and a set of mapping
-indices. However, the `Manager` bundle lacks mappings, so we can focus solely on
-the data domain. Essentially, we wish to construct an *abstract address domain*,
-which is complete relative to the `Manager` bundle.
+Let's try to prove the property with a fixed number of addresses. This example
+will motivate local reasoning in SmartACE. To do this, we must reduce the
+`Manager` bundle to a fixed number of addresses, and show that if the original
+bundle hasa counterexample, so does this new bundle. In the general case,
+Solidity addresses are both a data domain, and a set of mapping indices.
+However, the `Manager` bundle lacks mappings, so we can focus solely on the data
+domain. Essentially, we wish to construct an *abstract address domain*, which is
+complete relative to the `Manager` bundle.
 
-We will start by looking at the operations used on the abstract address domain
-From the source text, we can see that addresses only take part in equality
-operations. An equality operation determines whether two addresses are
+We will start by looking at the operations and relations used on abstract
+address domain. From the source code, we can see that addresses only take part
+in equality relations. An equality relation determines whether two addresses are
 distinguishable. We can distinguish between any two input addresses in a single
-transaction, or between an input address and a constant address. Therefore,
+transaction, and between an input address and a constant address. Therefore,
 completeness follows if we have enough addresses to distinguish all inputs and
 all constants. In other words, we need one distinct address value for each
 constant in the bundle, and one distinct address value for each input address.
@@ -97,7 +100,7 @@ constant in the bundle, and one distinct address value for each input address.
 At first it may seem that the `Manager` bundle is free from constants. However,
 the Solidity semantics allows smart contract to implicitly distinguish
 `address(0)`. Therefore, the `Manager` bundle has a single constant. Next we
-turn our attention to the number address inputs taken by each transaction,
+turn our attention to the number of address inputs taken by each transaction,
 otherwise known as the *transactional address footprint*. To illustrate this
 concept, we will find the transactional address footprint of
 `Fund.releaseTo(_new)`. Explicitly, each call to `Fund.releaseTo(_new)` takes in
@@ -107,8 +110,8 @@ access to the address of `Manager`, the address of `Fund`, and the value of
 this analysis for all other transactions, we would find a maximum transactional
 address footprint of 5. Therefore, we need 6 distinct addresses in total.
 
-In practice, SmartACE will perform this analysis automatically. We can verify
-our results by running:
+SmartACE will perform this analysis automatically. We can verify our results by
+runnings the following command and then inspecting the model.
 
   * `path/to/solc fund.sol --bundle=Manager --c-model --output-dir=fund`
   * `cd fund ; mkdir build ; cd build`
@@ -131,17 +134,18 @@ case 1: {
 ```
 
 The next two sections take a closer look at how SmartACE automates local
-reasoning. A reader who is more interested in the example property can safely
+reasoning. A reader who is more interested in the running example can safely
 skip to the [final section](#proving-the-correctness-of-fund-and-manager).
 
 ## Topology Checking through Program Syntax
 
-Let's take a closer look at how we constructed the abstract address domain. At a
-high level, we exploited syntactic patterns in each method's source code. We
-then drew conclusions about the client interactions. In fact, these patterns
-expose the underlying network topology, as we will see in the next tutorial. For
-now, we will describe these patterns explicitly, and show that they are
-applicable to many smart contracts.
+To understand how SmartACE automates the address analysis, we will take a closer
+look at how we constructed the abstract address domain. At a high level, we
+exploited syntactic patterns in each method's source code. We then drew
+conclusions about the client interactions. In fact, these patterns expose the
+underlying network topology, as we will see in the next tutorial. For now, we
+will describe these patterns explicitly, and show that they are applicable to
+many smart contracts.
 
 The patterns are as follows:
 
@@ -222,13 +226,14 @@ uncommon in real smart contracts, this often yields a deterministic assignment.
 
 ## Proving the Correctness of `Fund` and `Manager`
 
-As before, we can run `make verify` to obtain a proof certificate. The
-[certificate](https://arieg.bitbucket.io/pdf/hcvs17.pdf) is given in the form
-of an inductive program invariant. Using the invariant, we can prove that along
-any path of the program, every assertion holds. Unfortunately, the invariant is
-given with respect to LLVM-bytecode. SmartACE does not yet offer tooling to make
-the certificate more readable. Interpreting the certificate requires inspecting
-the LLVM-bytecode, and then mapping the registers back to variables. You can
+Now we finish with the running example. As before, we can run `make verify` to
+obtain a proof certificate. The
+[certificate](https://arieg.bitbucket.io/pdf/hcvs17.pdf) is given in the form of
+an inductive program invariant. Using the invariant, we can prove that along any
+program path, every assertion holds. Unfortunately, the invariant is given with
+respect to LLVM-bytecode. SmartACE does not yet offer tooling to make the
+certificate more readable. Interpreting the certificate requires inspecting the
+LLVM-bytecode, and then mapping the registers back to variables. You can
 take it on good faith that the certificate states:
 
   1. `Manager.fund.isOpen => called_openFund`
