@@ -68,7 +68,7 @@ Let's use SmartACE to see if this invariant really holds.
 
 ## Encoding the Property
 
-The first step in encoding the property is to state it precisely. Our logic of
+The first step in encoding our property is to state it precisely. Our logic of
 choice is past linear temporal logic (pLTL). We start with an informal statement
 of the property.
 
@@ -76,17 +76,18 @@ of the property.
 > the balance of `Manager.fund` *prior to* and after the last transaction
 > remains unchanged.
 
-We can formalize this using the
-[VerX Specification Language](https://verx.ch/docs/spec.html). This is a smart
-contract specification language, where `FUNCTION` refers to the function called
-in the last transaction, while `prev()` is an operator which returns the value
-of a variable before the last transaction. `always` and `once` are the
-corresponding pLTL operators. Our property becomes:
+We can formalize this statement in the
+[VerX Specification Language](https://verx.ch/docs/spec.html) for Ethereum smart
+contracts. In this language, `FUNCTION` is the name of the last method called by
+a client, while `prev(v)` is the value of `v` before `FUNCTION` was called.
+`once` and `always` pLTL operators, where `once(p)` is true if `p` has ever been
+true while `always(p)` is true if `p` has always been true. Using this language,
+our property becomes:
 
 ```
 always(
     !(once(FUNCTION == Manager.openFund()))
-    =>
+    ==>
     (BALANCE(Fund) == prev(BALANCE(Fund)))
 )
 ```
@@ -97,17 +98,17 @@ brevity, we introduce the following predicates:
   * `called := (FUNCTION == Manager.openFund())`
   * `unchanged := (BALANCE(Fund) == prev(BALANCE(Fund)))`
 
-The regular expression for the monitor is  `unchanged* called True*`. The
-corresponding automaton is as follows:
+The regular expression for the monitor is `(unchanged && !called)* called True*`.
+The corresponding automaton is as follows:
 
 ![](3_monitor.svg)
 
-The next section walks through instrumenting the model with the monitor. This
-procedure is currently manual, but will be automated in a future release of
-SmartACE. The readers less interested in these details can safely skip to the
-[final section](#debugging-the-contract).
+The next two sections explain the details of the model, and then walk through
+instrumenting the monitor. This procedure is currently manual, but will be
+automated in a future release of SmartACE. The readers less interested in these
+details can safely skip to the [final section](#debugging-the-contract).
 
-## Understanding the Model
+### Understanding the Model
 
 Before we instrument the SmartACE model, we take a detour to understand its
 structure. Readers only interested in the monitor can
@@ -218,7 +219,7 @@ provided by `libverify/`. For `Seahorn`, `sol_continue()` is alway true while
 iteration, a method is selected non-deterministically, and then executed with
 non-deterministic arguments. The simulation ends if an assertion fails.
 
-## Instrumenting the Model
+### Instrumenting the Model
 
 We can encode the monitor using three ghost variables and a single assertion.
 We start by declaring each variable at the beginning of `cmodel.c`.
@@ -268,7 +269,7 @@ while (sol_continue()) {
     /* ... Other methods ... */
     }
     post_balance = contract_1->model_balance;
-    sol_assert(called_openFund || pre_balance.v == post_balance.v, 0);
+    sol_assert(called_openFund || pre_balance.v == post_balance.v, "Failure.");
 }
 ```
 
@@ -321,8 +322,13 @@ value [uint256]: 1
 
 At first this counterexample might seem surprising. No client should be able to
 call `open()` directly. However, this is precisely what happens. To figure out
-why, we can log the owner of `contract_1` on each iteration of the transaction
-loop. We also suppress the block number and timestamp:
+why, we can log the owner of `contract_1` during each iteration of the
+transaction loop. After making these changes we can rerun:
+
+  * `make witness`
+  * `./witness`
+
+To obtain the following trace:
 
 ```
 [Constructing contract_0 and children]

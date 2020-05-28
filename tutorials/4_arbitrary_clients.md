@@ -69,7 +69,7 @@ formalize the property as:
 ```
 always(
     !(once(FUNCTION == Manager.openFund()))
-    =>
+    ==>
     (BALANCE(Fund) == prev(BALANCE(Fund)))
 )
 ```
@@ -77,12 +77,12 @@ always(
 We then construct a monitor from the property. A more detailed analysis is
 found in the [previous tutorial](3_transactions.md).
 
-## Restricting the Addresses of `Fund` and `Manager`
+## Limiting Addresses in the `Manager` Bundle
 
 Let's try to prove the property with a fixed number of addresses. This example
 will motivate local reasoning in SmartACE. To do this, we must reduce the
 `Manager` bundle to a fixed number of addresses, and show that if the original
-bundle hasa counterexample, so does this new bundle. In the general case,
+bundle has a counterexample, so does this new bundle. In the general case,
 Solidity addresses are both a data domain, and a set of mapping indices.
 However, the `Manager` bundle lacks mappings, so we can focus solely on the data
 domain. Essentially, we wish to construct an *abstract address domain*, which is
@@ -194,7 +194,7 @@ As for bounded loops, we can unroll them prior to analysis.
 
 ## Restricting Addresses in SmartACE
 
-When the above patterns hold, SmartACE will compute an abstract address domain.
+When the above patterns hold, SmartACE will compute can abstract address domain.
 In theory, we need one address for each distinguishable address, otherwise known
 as a *client equivalence class*. In theory, there is one class for each smart
 contract and one class for every arbitrary transactional input. Constants and
