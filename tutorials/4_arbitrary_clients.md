@@ -79,36 +79,49 @@ found in the [previous tutorial](3_transactions.md).
 
 ## Limiting Addresses in the `Manager` Bundle
 
-Let's try to prove the property with a fixed number of addresses. This example
-will motivate local reasoning in SmartACE. To do this, we must reduce the
-`Manager` bundle to a fixed number of addresses, and show that if the original
-bundle has a counterexample, so does this new bundle. In the general case,
-Solidity addresses are both a data domain, and a set of mapping indices.
-However, the `Manager` bundle lacks mappings, so we can focus solely on the data
-domain. Essentially, we wish to construct an *abstract address domain*, which is
-complete relative to the `Manager` bundle.
+In the first tutorial, contracts were *oblivious* to their clients. No matter
+which client initiated a transaction, the outcome would always be the same. In
+reality, most contracts are *client aware*. They read from `msg.sender`, and
+will adjust their behaviour according. This is true of the `Fund` contract, as
+it can designate a single client as its `owner`. To show that our property holds
+in general, we must prove that adding an additional client will never introduce
+a new interaction which violates the property.
 
-We will start by looking at the operations and relations used on abstract
-address domain. From the source code, we can see that addresses only take part
-in equality relations. An equality relation determines whether two addresses are
-distinguishable. We can distinguish between any two input addresses in a single
-transaction, and between an input address and a constant address. Therefore,
-completeness follows if we have enough addresses to distinguish all inputs and
-all constants. In other words, we need one distinct address value for each
-constant in the bundle, and one distinct address value for each input address.
+We could tackle this problem directly by modeling every client. However, this
+would not scale to bundles with even a small amount of client state. Instead, it
+would be ideal to summarize the clients, and then retain only a small set of
+addresses. Even in the case of `Fund`, where clients lack state, we would still
+benefit from reducing the search space of interleaving client transactions.
 
-At first it may seem that the `Manager` bundle is free from constants. However,
-the Solidity semantics allows smart contract to implicitly distinguish
-`address(0)`. Therefore, the `Manager` bundle has a single constant. Next we
-turn our attention to the number of address inputs taken by each transaction,
-otherwise known as the *transactional address footprint*. To illustrate this
-concept, we will find the transactional address footprint of
-`Fund.releaseTo(_new)`. Explicitly, each call to `Fund.releaseTo(_new)` takes in
-two addresses: `msg.sender` and `_new`. Implicitly, the transaction also has
-access to the address of `Manager`, the address of `Fund`, and the value of
-`Fund.owner`. This gives a transactional address footprint of 5. If we continued
-this analysis for all other transactions, we would find a maximum transactional
-address footprint of 5. Therefore, we need 6 distinct addresses in total.
+For this reason, let's try proving the property with a fixed number of
+addresses. For convenience, we will refer to the arrangement of clients and
+contracts as a *network topology*, and we will refer to the subset of clients as
+a *neighbourhood*. We will justify these terms in the next tutorial.
+
+So what happens when we construct a neighbourhood? If we select too few clients,
+we may lose behaviours from the original bundle (formally, this is an
+*underapproximation*). For instance, if we deployed `Fund` with a single client,
+the `owner` of `Fund` would never change. However, if we introduced too many
+clients, this could lead to redundant traces (formally, this is *symmetry*). For
+example, if we deployed `Fund` with 100 clients, there would be many identical
+ways to select an initial `owner`, and then transfer to a secondary `owner`.
+
+If we look closely at `Fund`, we will see that addresses only appear in equality
+relations. An equality relation can distinguish between any two address
+arguments, or between an address argument and a literal address. Note that due
+to the semantics of Solidity, `address(0)` is an implicit literal of all
+bundles. We are guaranteed to cover all paths of execution if we can assign a
+unique value to each address in any transaction. The specific values are
+unimportant, provided that we include all literals inside the neighbourhood.
+
+In other words, we must find the maximum number of addresses use by any
+transaction. We call this number the maximum *transactional address footprint*.
+As the `Manager` bundle is free from address operators, we only need to count
+the number of contract addresses, address variables, and address arguments in
+each transaction. We find that `Fund.releaseTo(address)` has the maximum address
+footprint, with two contract addresses, one address variable (`owner`) and two
+address arguments (`msg.sender` and `_new`). Therefore, our neighbourhood will
+have 6 addresses.
 
 SmartACE will perform this analysis automatically. We can verify our results by
 runnings the following command and then inspecting the model.
@@ -133,9 +146,10 @@ case 1: {
 
 ```
 
-The next two sections take a closer look at how SmartACE automates local
-reasoning. A reader who is more interested in the running example can safely
-skip to the [final section](#proving-the-correctness-of-fund-and-manager).
+The next two sections take a closer look at how SmartACE automatically restricts
+the network topology to a sufficient neighbourhood. The reader who is only
+interested in the running example can safely skip to the
+[final section](#proving-the-correctness-of-fund-and-manager).
 
 ## Topology Checking through Program Syntax
 
