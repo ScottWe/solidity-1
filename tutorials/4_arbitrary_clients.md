@@ -123,31 +123,53 @@ footprint, with two contract addresses, one address variable (`owner`) and two
 address arguments (`msg.sender` and `_new`). Therefore, our neighbourhood will
 have 6 addresses.
 
-SmartACE will perform this analysis automatically. We can verify our results by
-runnings the following command and then inspecting the model.
+### Instrumenting the Restricted Address Set
+
+SmartACE will construct the neighbourhood automatically. We can compare
+against SmartACE by runnings the following commands.
 
   * `path/to/solc fund.sol --bundle=Manager --c-model --output-dir=fund`
   * `cd fund ; mkdir build ; cd build`
   * `cmake .. -DSEA_PATH=/path/to/seahorn/bin`
   * `make run-clang-format`
 
-
-At line 149 of `../cmodel.c`, we find the arbitrary address argument, `_new`,
-restricted to a 6 value address space, as expected:
+As before, we will open `../cmodel.c`. Let's start by inspecting the assignment
+of literal addresses and contract addresses at line 121:
 
 ```cpp
-case 1: {
-    smartace_log("Calling releaseTo(_new) on contract_1]");
-    sol_address_t arg__new = Init_sol_address_t(nd_range(0, 6, "_new"));
-    Fund_Method_releaseTo(contract_1, sender, value, blocknum, timestamp, paid, origin, arg__new);
-    smartace_log("[Call successful]");
-    break;
-}
-
+global_address_literal_0 = 0;
+contract_0.model_address.v = 1;
+contract_1 = &contract_0.user_fund;
+contract_1->model_address.v = 2;
 ```
 
-The next two sections take a closer look at how SmartACE automatically restricts
-the network topology to a sufficient neighbourhood. The reader who is only
+This highlights several design decisions. All addresses come from a continuous
+range, starting from `0`. The address at `0` is always `address(0)`. Following
+this is the set of contract addresses. These are assigned statically, in the
+order the contracts are constructed. The remaining addresses are reserved for
+clients. To ensure the neighbourhood is always continuous, we replace address
+literals with global variables. These variables are set once, as we see here
+with `global_address_literal_0`. If there were any other address literals, they
+would be assigned non-deterministically, to unique addresses. This captures the
+case where a contract address is used as a literal. To see how the addresses are
+used, we move ahead to line 133:
+
+```cpp
+sender.v = nd_range(3, 6, "sender");
+```
+
+This line highlights the benefit of our neighbourhood arrangement. By packing
+together all client addresses, we can select a sender simply by selecting a
+number between two bounds. For general address arguments, we can sample over the
+entire neighbourhood in the same way. For example refer to line  151:
+
+```cpp
+sol_address_t arg__new = Init_sol_address_t(nd_range(0, 6, "_new"));
+```
+
+With this, SmartACE has reduced the network topology to a sufficient
+neighbourhood. In the net section, we take a closer look at what assumptions
+SmartACE must make to construct this neighbourhood. The reader who is only
 interested in the running example can safely skip to the
 [final section](#proving-the-correctness-of-fund-and-manager).
 
@@ -205,38 +227,6 @@ Solidity
 already warn against unbounded loops. Unbounded loops require unbounded gas,
 which is [impossible in Ethereum](https://ethgasstation.info/blog/gas-limit/).
 As for bounded loops, we can unroll them prior to analysis.
-
-## Restricting Addresses in SmartACE
-
-When the above patterns hold, SmartACE will compute can abstract address domain.
-In theory, we need one address for each distinguishable address, otherwise known
-as a *client equivalence class*. In theory, there is one class for each smart
-contract and one class for every arbitrary transactional input. Constants and
-state variables as not so simple. In theory there is a class for each constant
-and each state variable, along with their intersections with any other class.
-For example, a smart contract address may be a constant and also used as a state
-variable.
-
-However, for the `Manager` bundle we ended up with linearly many addresses,
-despite the presence of constants and state variables. Implicitly we made the
-following observations. First, we know that each constant is unique, therefore
-intersects with a single client or a single contract in any viable execution. We
-decide this intersection at the start of the model. We make a similar reduction
-for state variables by tracking the active equivalence class throughout the
-execution.
-
-Therefore, we require one address for each smart contract, one address for each
-transactional input, one address for each state variable, and one address for
-each constant.
-
-### Encoding the Addresses in SmartACE
-
-SmartACE encodes these addresses in a consistent way. The address `0` is always
-the constant `address(0)`. The addresses immediately following `0` are contract
-addresses. The remaining addresses are arbitrary clients, state variable
-placeholders, and constant placeholders in any order. For non-zero constants, we
-non-deterministically assign it a unique address. As non-zero constants are
-uncommon in real smart contracts, this often yields a deterministic assignment.
 
 ## Proving the Correctness of `Fund` and `Manager`
 
