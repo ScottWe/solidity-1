@@ -173,30 +173,30 @@ SmartACE must make to construct this neighbourhood. The reader who is only
 interested in the running example can safely skip to the
 [final section](#proving-the-correctness-of-fund-and-manager).
 
-## Topology Checking through Program Syntax
+## Reasoning About Clients Through Program Syntax
 
-To understand how SmartACE automates the address analysis, we will take a closer
-look at how we constructed the abstract address domain. At a high level, we
-exploited syntactic patterns in each method's source code. We then drew
-conclusions about the client interactions. In fact, these patterns expose the
-underlying network topology, as we will see in the next tutorial. For now, we
-will describe these patterns explicitly, and show that they are applicable to
-many smart contracts.
+So far we have seen how to construct a neighbourhood for the `Manager` bundle.
+We argued that the model was complete by appeal the network's topology, that is,
+the way in which clients are organized. We inferred this organization by
+inspecting the source text. This motivates a syntax-directed client analysis.
 
-The patterns are as follows:
+In particular, we can summarize our analysis of the `Manager` bundle with four
+syntactic patterns. SmartACE does this analysis automatically. The patterns are
+as follows:
 
 ### 1. Equality is the only address relation.
 
-Addresses must be unordered. This disallows many topologies, such as linear
-orders. Thankfully, Solidity was designed for wealth transfer between arbitrary
-parties, so this restriction is met by major Ethereum protocols such as the
-[ERC-20](https://eips.ethereum.org/EIPS/eip-20) and the
-[ERC-721](https://eips.ethereum.org/EIPS/eip-721).
+Addresses must be unordered. This ensures that given `n` addresses, we only
+require `n` values to satisfy all possible comparisons. This however, comes at
+the cost of many client organizations. Thankfully, Solidity was designed for
+wealth transfer between arbitrary parties, so this restriction is met by major
+Ethereum protocols such as the [ERC-20](https://eips.ethereum.org/EIPS/eip-20)
+and the [ERC-721](https://eips.ethereum.org/EIPS/eip-721).
 
 ### 2. Address operations are never used.
 
-Addresses must also be unstructured. This disallows other topologies, such as
-rings and trees. While such topologies can have uses in smart contracts, they
+Addresses must also be unstructured. This disallows many client arrangements,
+such as trees. While such topologies can have uses in smart contracts, they
 are
 [discouraged in relevant examples](https://solidity.readthedocs.io/en/v0.5.3/solidity-by-example.html).
 
@@ -207,8 +207,10 @@ arithmetic operators and relations to address values.
 
 ### 4. Addresses must come from inputs or named state variables.
 
-This ensures that every transactional address footprint is bounded. In practice,
-it prevents iteration over addresses, such as in the following example:
+This ensures that every transactional address footprint is bounded. Given the
+first three restrictions, this ensures that the neighbourhood is bounded. In
+practice, this pattern prevents iteration over addresses, such as in the
+following example:
 
 ```
 contract UnboundedFootprintExample {
