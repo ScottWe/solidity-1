@@ -226,4 +226,13 @@ we replaced the addresses with an *abstract domain*).
 
 ### Local Reasoning in SmartACE
 
+When we apply local reasoning to SmartACE, we think of each addresses as being
+either *representative* or *interference*
+
+[TODO: perhaps we should change the terminology to "distinguished" and
+"representative". Distinguished (currently representative[OLD]) addresses are
+used to designate a single client. Representative[NEW] (currently interference)
+addresses stand in for any member from a group of clients. In other words, it is
+the "representative of an equivalence class".]
+
 ## Proving the Property
