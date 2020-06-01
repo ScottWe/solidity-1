@@ -194,6 +194,36 @@ The topology for 7 clients is:
 
 ### Compositional Invariants in the `Manager` Bundle
 
+Local reasoning allows us to take a sufficiently large neighbourhood, against
+which we can then prove properties for the entire network. We do this in two
+steps. First, we no longer think of each data vertex as belonging to a single
+client. Instead, we now let it represent a group of similar clients (formally,
+this is an *equivalence class*). We then replace each data vertex with an
+invariant which summarizes all possible values at the vertex. We call this
+a compositional invariant.
+
+This invariant can be any predicate over the state of the neighbourhood.
+Specifically, it can be aware of the class it is summarizing. However, to be
+compositional, it must also satisfy three properties.
+
+  1. (Initialization) When the neighbourhood is zero-initialized, the zero
+     satisfies the invariant.
+  2. (Transaction) If the invariant holds of some clients before they perform a
+     transaction, the invariant still holds afterwards.
+  3. (Non-interference) If the invariant holds of some client, the actions of
+     any other clients cannot break it.
+
+In other words, the compositional invariant holds initially, and is never
+violated by any clients.
+
+We can also use this insight to better justify our restricted address values in
+the [previous tutorial](4_arbitrary_clients.md). As each address is really a
+summary of one or more clients, the address values are no longer meaningful.
+Instead, what matters are the relationships satisfied by two or more addresses.
+We used the program syntax to identify that only equality mattered, and then we
+constructed a set of address values which could satisfy this relation (formally,
+we replaced the addresses with an *abstract domain*).
+
 ### Local Reasoning in SmartACE
 
 ## Proving the Property
