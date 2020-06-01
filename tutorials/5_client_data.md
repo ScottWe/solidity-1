@@ -8,7 +8,33 @@ categories: [smartace, verification, model checking, local reasoning]
 
 # 5. Reasoning About Client State in SmartACE
 
+[Last time](4_arbitrary_clients.md) we used SmartACE to prove safety properties
+for any number of clients. The example was by no means trivial, but it was in
+many ways a toy. Namely, the `Manager` bundle we analyzed did not keep mappings
+from client addresses to client data. In such cases we must
+summarize both the client addresses and the client data.
+
+In this post we will prove a simple invariant with client data. First, we extend
+the `Manager` bundle to use maps, and describe the property of interest. We then
+revisit network topology to better understand the impact of client data. Using
+this insight, we then work on summarizing the client data. Finally, we show how
+SmartACE applies this theory in practice, and then use it to verify our new
+property.
+
 ## Extending Our Running Example
+
+Let's start by returning to the `Manager` bundle. To briefly recap, the
+`Manager` bundle consists of two smart contracts: a `Fund` for clients to
+`deposit()` Ether, and a `Manager` which owns and controls access to the `Fund`.
+In the past two tutorials we
+[identified an ownership exploit](3_transactions.md), patched the bug, and then
+[verified its absence for any number of clients](4_arbitrary_clients.md).
+
+We now wish to move on to mapping properties. To keep our example realistic, we
+add an `investment` mapping to `Fund` which tracks how much Ether each client
+deposits. We add a `Fund.transfer(address, uint256)` method which allows a
+client to relinquish `_amount` Ether to `_destination`. The new contract is
+given below:
 
 ```solidity
 contract Fund {
@@ -32,13 +58,13 @@ contract Fund {
     }
 
     // Move money between accounts.
-    function transfer(address _dst, uint _amt) {
-        require(_amt > 0);
-        require(invested[_to] + _amt > invested[_to]);
-        require(invested[msg.sender] >= _amt);
+    function transfer(address _destination, uint _amount) {
+        require(_amount > 0);
+        require(invested[_destination] + _amount > invested[_destination]);
+        require(invested[msg.sender] >= _amount);
 
-        invested[msg.sender] -= _amt;
-        invested[_to] += _amt;
+        invested[msg.sender] -= _amount;
+        invested[_destination] += _amount;
     }
 }
 
@@ -51,9 +77,27 @@ contract Manager {
 }
 ```
 
-> It is *always* the case that whenever `msg.sender` calls `Fund.transfer()` to
-> send `_amt` to `_dst`, then `Fund.invested[msg.sender]` decrease by `_amt` and
-> `Fund.invested[_to]` increases by amount.
+We can now consider local client properties. In these properties, taken an
+invariant for a small set of properties. For example, the total investment for
+two fixed clients is conserved after calling `Fund.transfer(address, uint256)`.
+We can then extend this into a local client property by requiring that for any
+two clients, their total investments are conserved by
+`Fund.transfer(address, uint256)`. In fact, this will be our running example for
+the remainder of the tutorial. In past linear temporal logic (pLTL) we would
+say:
+
+> It is *always* the case that whenever `msg.sender` calls `Fund.transfer()` and
+> sends `_amount` to `_dst`, then `Fund.invested[msg.sender]` is decreased by
+> `_amount` while  `Fund.invested[_destination]` is increased by `_amount`.
+
+We then formalize the property in the
+[VerX Specification Language](https://verx.ch/docs/spec.html). Recall that
+`FUNCTION` is the name of the last method called, while `prev(v)` is the value
+of `v` before `FUNCTION` was called. `once` and `always` are pLTL operators,
+where `once(p)` is true if `p` has ever been true while `always(p)` is true if
+`p` has always been true. We write `Fund.transfer(address, uint256)[i]` to refer
+to the i-th argument passed to `Fund.transfer(address, uint256)`. This gives the
+formalization:
 
 ```
 always(
@@ -70,6 +114,17 @@ always(
     )
 )
 ```
+
+As a final step, we can constructor a monitor for the property. The monitor will
+detect if the property becomes violated, and will allow us to verify the claim.
+Our property is essentially a functional post-condition, so the monitor is very
+compact. First we introduce the following predicates:
+
+  * `is_transfer := FUNCTION == Fund.transfer`
+  * `sent := invested[msg.sender] + _amount = prev(invested[msg.sender])`
+  * `recv := prev(invested[_destination]) + _amount = prev(invested[_destination]`
+
+And then give the regular expression `(!is_transfer || (send && recv)) *`.
 
 ## Local Reasoning Over Client Mappings
 
