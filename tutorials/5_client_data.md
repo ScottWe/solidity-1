@@ -214,15 +214,25 @@ compositional, it must also satisfy three properties.
      any other clients cannot break it.
 
 In other words, the compositional invariant holds initially, and is never
-violated by any clients.
+violated by any clients. This ensures that the values written into data
+vertices are never "forgotten". Using this intuition, it is not hard to see why
+local reasoning with a compositional invariant is guaranteed to cover all paths
+of execution.
 
-We can also use this insight to better justify our restricted address values in
-the [previous tutorial](4_arbitrary_clients.md). As each address is really a
-summary of one or more clients, the address values are no longer meaningful.
-Instead, what matters are the relationships satisfied by two or more addresses.
-We used the program syntax to identify that only equality mattered, and then we
-constructed a set of address values which could satisfy this relation (formally,
-we replaced the addresses with an *abstract domain*).
+While compositionality ensures that we are complete, it does not necessarily
+ensure soundness. If our summary is too weak, it might permit counterexamples
+which do not exist in the original bundle. We say that a compositional invariant
+is *adequate* if it additionally blocks all counterexamples.
+
+We can use the insight of compositional invariants to better justify our
+restricted address values in the [previous tutorial](4_arbitrary_clients.md). As
+each address is really a summary of one or more clients, the address values are
+no longer meaningful. Instead, what matters are the relationships satisfied by
+two or more addresses. We used the program syntax to identify that only equality
+mattered, and then we constructed a set of address values which could satisfy
+this relation (formally, we created an *abstract domain* of addresses). We then
+ensured adequacy by blocking trivial counterexamples (i.e., no two contracts
+have the same address).
 
 ### Local Reasoning in SmartACE
 
@@ -238,5 +248,31 @@ we know the exact value of each representative data vertex.
 used to designate a single client. Representative[NEW] (currently interference)
 addresses stand in for any member from a group of clients. In other words, it is
 the "representative of an equivalence class".]
+
+Before applying local reasoning, SmartACE requires three parameters: the number
+of representative addresses, the number of interference addresses, and a
+candidate invariant. SmartACE will discover the minimum number of representative
+and interference addresses automatically, using the techniques outlined in the
+[previous tutorial](4_arbitrary_clients.md). Conversely, the candidate invariant
+must be provided manually. SmartACE will verify that the candidate is both
+compositional and adequate. In the future, SmartACE will also automate searching
+for the invariant.
+
+As an example, we will now walk through verifying a candidate invariant. We
+start with the weakest candidate, namely `True`. As `True` implies `True`, this
+candidate is compositional by definition. Instead, we can focus entirely on
+adequacy. We will do this in two steps. The next section takes a detour and will
+briefly outline how maps are modelled in SmartACE. The following section walks
+through adequacy checks in SmartACE. With this in mind, let's start by
+generating the model:
+
+  * `path/to/solc fund.sol --bundle=Manager --c-model --output-dir=fund`
+  * `cd fund ; mkdir build ; cd build`
+  * `cmake .. -DSEA_PATH=/path/to/seahorn/bin`
+  * `make run-clang-format`
+
+#### Mappings in SmartACE
+
+#### Instrumenting the Model
 
 ## Proving the Property
