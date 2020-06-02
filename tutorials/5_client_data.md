@@ -226,8 +226,12 @@ we replaced the addresses with an *abstract domain*).
 
 ### Local Reasoning in SmartACE
 
-When we apply local reasoning to SmartACE, we think of each addresses as being
-either *representative* or *interference*
+When we apply local reasoning in SmartACE, we partition the addresses into
+*representatives* and *interference*. Representative addresses are used when the
+address must refer to a single client, such as a literal address or a contract
+address. Interference addresses are used when the address does not refer to a
+distinct client. This distinction is important, as at any point during analysis,
+we know the exact value of each representative data vertex.
 
 [TODO: perhaps we should change the terminology to "distinguished" and
 "representative". Distinguished (currently representative[OLD]) addresses are
