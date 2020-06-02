@@ -333,4 +333,16 @@ allows us to reason locally about global mapping sums.
 
 #### Instrumenting the Model
 
+Now that we understand SmartACE mappings, we are ready to instrument the
+adequacy check. There are two parts to the adequacy check.
+
+  1. We must instrument the property, just as we have done in previous examples.
+  2. We must select new interference data entries before each transaction.
+
+If we were to stop after step one, we would be left with a bounded model, just
+as we had constructed in [tutorial 3](3_transactions.md). To generalize this to
+an arbitrary number of clients, we must "select" a new interference before each
+transaction. Intuitively, we can think of this as allowing a new client from the
+same client group to make a move. Let's see how this looks in practice.
+
 ## Proving the Property
