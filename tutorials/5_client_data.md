@@ -241,7 +241,7 @@ When we apply local reasoning in SmartACE, we partition the addresses into
 address must refer to a single client, such as a literal address or a contract
 address. Interference addresses are used when the address does not refer to a
 distinct client. This distinction is important, as at any point during analysis,
-we know the exact value of each representative data vertex.
+we know the exact value of each representative vertex.
 
 [TODO: perhaps we should change the terminology to "distinguished" and
 "representative". Distinguished (currently representative[OLD]) addresses are
@@ -367,19 +367,41 @@ case 5: {
   smartace_log("...");
   sol_address_t arg__destination = Init_sol_address_t(nd_range(0, 6, ""));
   sol_uint256_t arg__amount = Init_sol_uint256_t(nd_uint256_t(""));
-  /* INSTRUMENTATION: START */
+  /* [START] INSTRUMENTATION */
   sender_pre = Read_Map_1(&contract_1->user_investments, sender);
   recipient_pre = Read_Map_1(&contract_1->user_investments, arg__destination);
-  /* INSTRUMENTATION: END */
+  /* [ END ] INSTRUMENTATION */
   Fund_Method_transfer(/* ... call data ... */, arg__destination, arg__amount);
-  /* INSTRUMENTATION: START */
+  /* [START] INSTRUMENTATION */
   sender_post = Read_Map_1(&contract_1->user_investments, sender);
   recipient_post = Read_Map_1(&contract_1->user_investments, arg__destination);
   sol_assert(sender_pre.v == sender_post.v + arg__amount.v, "Fail.");
   sol_assert(recipient_post.v == recipient_pre.v + arg__amount.v, "Fail.");
-  /* INSTRUMENTATION: END */
+  /* [ END ] INSTRUMENTATION */
   smartace_log("...");
   break;
+}
+```
+
+Now we must instrument the transactional loop to select a new process before
+each transaction. Since the processes in our network model are conceptual, this
+equates to initializing a new neighbourhood. We know that representative clients
+are shared between all neighbourhoods, so this equates to selecting new values
+for all interference vertices. We make this selection in accordance with the
+compositional invariant.
+
+First, let's make the compositional invariant concrete. By definition, the
+compositional invariant is a predicate over process configurations. Therefore,
+we add the following definition at the top of `cmodel.c`:
+
+```cpp
+// The `True` compositional invariant.
+int compositional_invariant(struct Manager *c0, struct Fund *c1)
+{
+  // We ignore the process state...
+  (void) c0; (void) c1;
+  // ... and always return true.
+  return 1;
 }
 ```
 
