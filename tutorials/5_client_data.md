@@ -345,4 +345,42 @@ an arbitrary number of clients, we must "select" a new interference before each
 transaction. Intuitively, we can think of this as allowing a new client from the
 same client group to make a move. Let's see how this looks in practice.
 
+In general, step one requires checking the property against any arbitrary client
+after the transaction has executed. We will see an example of this in the next
+tutorial. In case of our property, the clients are not arbitrary. They are
+bounded to the sender and recipient of each `Fund.transfer(address,uint256)`
+call. First we add global ghost variables to track the pre- and post-investments
+of both clients:
+
+```cpp
+GHOST_VAR sol_uint256_t sender_pre;
+GHOST_VAR sol_uint256_t sender_post;
+GHOST_VAR sol_uint256_t recipient_pre;
+GHOST_VAR sol_uint256_t recipient_post;
+```
+
+We then instrument the check in the `Fund.transfer(address,uint256)` transaction
+at line 278:
+
+```cpp
+case 5: {
+  smartace_log("...");
+  sol_address_t arg__destination = Init_sol_address_t(nd_range(0, 6, ""));
+  sol_uint256_t arg__amount = Init_sol_uint256_t(nd_uint256_t(""));
+  /* INSTRUMENTATION: START */
+  sender_pre = Read_Map_1(&contract_1->user_investments, sender);
+  recipient_pre = Read_Map_1(&contract_1->user_investments, arg__destination);
+  /* INSTRUMENTATION: END */
+  Fund_Method_transfer(/* ... call data ... */, arg__destination, arg__amount);
+  /* INSTRUMENTATION: START */
+  sender_post = Read_Map_1(&contract_1->user_investments, sender);
+  recipient_post = Read_Map_1(&contract_1->user_investments, arg__destination);
+  sol_assert(sender_pre.v == sender_post.v + arg__amount.v, "Fail.");
+  sol_assert(recipient_post.v == recipient_pre.v + arg__amount.v, "Fail.");
+  /* INSTRUMENTATION: END */
+  smartace_log("...");
+  break;
+}
+```
+
 ## Proving the Property
