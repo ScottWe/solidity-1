@@ -58,7 +58,7 @@ contract Fund {
     }
 
     // Move money between accounts.
-    function transfer(address _destination, uint _amount) {
+    function transfer(address _destination, uint _amount) public {
         require(_amount > 0);
         require(invested[_destination] + _amount > invested[_destination]);
         require(invested[msg.sender] >= _amount);
@@ -272,6 +272,64 @@ generating the model:
   * `make run-clang-format`
 
 #### Mappings in SmartACE
+
+Open `cmodel.c`. At line 8 we can find the mapping itself.
+
+```cpp
+struct Map_1 {
+  sol_uint256_t data_0;
+  sol_uint256_t data_1;
+  sol_uint256_t data_2;
+  sol_uint256_t data_3;
+  sol_uint256_t data_4;
+  sol_uint256_t data_5;
+};
+```
+
+We observe that the mapping stores a single entry for each restricted address
+value. The intention is that during transactions, the `data_` variables form a
+snapshot of some neighbourhood within the network. As addresses `0` to `2` are
+representatives, these entries are shared between all possible neighbourhoods.
+For addresses `3` to `5`, however, the entries are interference and need not
+persist across neighbourhoods. This insight will be important once we instrument
+the model.
+
+Moving to lines 147 to 181, we will find the operations defined on the mapping.
+
+```cpp
+sol_uint256_t Read_Map_1(struct Map_1 *arr, sol_address_t key_0) {
+  if (5 == key_0.v)
+  {
+    return arr->data_5;
+  }
+  /* ... other cases ... */
+  else if (0 == key_0.v)
+  {
+    return arr->data_0;
+  }
+  /* ... unreachable error case ... */
+}
+
+void Write_Map_1(struct Map_1 *arr, sol_address_t key_0, sol_uint256_t dat) {
+  if (5 == key_0.v)
+  {
+    arr->data_5 = dat;
+  }
+  /* ... other cases ... */
+  else if (0 == key_0.v)
+  {
+    arr->data_0 = dat;
+  }
+}
+```
+
+The `Read_Map_` and `Write_Map_` are used to read from and write to mappings. We
+chose to use structures and methods over C-style arrays for two reasons. First,
+C-style arrays do not permit for statically sized, multi-dimensional arrays,
+whereas structures can easily encode any statically sized data type. Second, the
+use of the `Read_Map_` and `Write_Map_` allow for SmartACE to easily instrument
+mapping accesses. We will see in the next tutorial that write instrumentation
+allows us to reason locally about global mapping sums.
 
 #### Instrumenting the Model
 
