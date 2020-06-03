@@ -13,21 +13,23 @@ ownership exploits in a simple smart contract. We concluded the tutorial by
 fixing the bug, and proving its absence for executions with two clients.
 However, a real developer would want to verify the property holds for any
 number of clients. This is known as the parameterized model checking problem,
-and in SmartACE, we solve it through local reasoning.
+and in SmartACE, we solve it through local reasoning [[1](#references),
+[2](#references)].
 
 Informally, the parameterized model checking problem asks whether a property
 about clients is invariant for any number of clients. Local reasoning allows us
 to reduce the parameterized model checking problem to a model with a fixed
-number of clients. In this tutorial, we will return to the `Fund` and `Manager`
+number of clients. We then generalize the results to an arbitrary number of
+clients. In this tutorial, we will return to the `Fund` and `Manager`
 [example](3_transactions.md), and show that its proof certificate extends to any
-number of clients. In the following tutorials, we will extend our technique to
-contracts with mappings of client data.
+number of clients. In the [following tutorials](5_client_data.md), we will
+extend our technique to contracts with mappings of client data.
 
 ## The Contract and Property
 
 We now return to the `Manager` bundle given below. As before, we have two
 smart contracts: `Fund` and `Manager`. The `Manager` constructs a new `Fund`,
-for which it is is initially its owner. The `Manager` exposes a single method,
+for which it is initially its owner. The `Manager` exposes a single method,
 `openFund()`, which allows clients to deposit Ether into `Fund`. To fix the
 ownership exploit in the previous example, we have added an `ownerOnly()`
 modifier to the protected interfaces of `Fund`, and have replaced `claim()` with
@@ -79,13 +81,13 @@ found in the [previous tutorial](3_transactions.md).
 
 ## Limiting Addresses in the `Manager` Bundle
 
-In the first tutorial, contracts were *oblivious* to their clients. No matter
-which client initiated a transaction, the outcome would always be the same. In
-reality, most contracts are *client aware*. They read from `msg.sender`, and
-will adjust their behaviour according. This is true of the `Fund` contract, as
-it can designate a single client as its `owner`. To show that our property holds
-in general, we must prove that adding an additional client will never introduce
-a new interaction which violates the property.
+In the [first tutorial](2_getting_started.md), contracts were *oblivious* to
+their clients. No matter which client initiated a transaction, the outcome would
+always be the same. In reality, most contracts are *client aware*. They read
+from `msg.sender`, and will adjust their behaviour according. This is true of
+the `Fund` contract, as it can designate a single client as its `owner`. To show
+that our property holds in general, we must prove that adding an additional
+client will never introduce a new interaction which violates the property.
 
 We could tackle this problem directly by modeling every client. However, this
 would not scale to bundles with even a small amount of client state. Instead, it
@@ -96,7 +98,8 @@ benefit from reducing the search space of interleaving client transactions.
 For this reason, let's try proving the property with a fixed number of
 addresses. For convenience, we will refer to the arrangement of clients and
 contracts as a *network topology*, and we will refer to the subset of clients as
-a *neighbourhood*. We will justify these terms in the next tutorial.
+a *neighbourhood*. We will justify these terms in the
+[next tutorial](5_client_data.md).
 
 So what happens when we construct a neighbourhood? If we select too few clients,
 we may lose behaviours from the original bundle (formally, this is an
@@ -114,7 +117,7 @@ bundles. We are guaranteed to cover all paths of execution if we can assign a
 unique value to each address in any transaction. The specific values are
 unimportant, provided that we include all literals inside the neighbourhood.
 
-In other words, we must find the maximum number of addresses use by any
+In other words, we must find the maximum number of addresses used by any
 transaction. We call this number the maximum *transactional address footprint*.
 As the `Manager` bundle is free from address operators, we only need to count
 the number of contract addresses, address variables, and address arguments in
@@ -168,7 +171,7 @@ sol_address_t arg__new = Init_sol_address_t(nd_range(0, 6, "_new"));
 ```
 
 With this, SmartACE has reduced the network topology to a sufficient
-neighbourhood. In the net section, we take a closer look at what assumptions
+neighbourhood. In the next section, we take a closer look at what assumptions
 SmartACE must make to construct this neighbourhood. The reader who is only
 interested in the running example can safely skip to the
 [final section](#proving-the-correctness-of-fund-and-manager).
@@ -176,9 +179,9 @@ interested in the running example can safely skip to the
 ## Reasoning About Clients Through Program Syntax
 
 So far we have seen how to construct a neighbourhood for the `Manager` bundle.
-We argued that the model was complete by appeal the network's topology, that is,
-the way in which clients are organized. We inferred this organization by
-inspecting the source text. This motivates a syntax-directed client analysis.
+We argued that the model was complete by appealing to the network's topology,
+that is, the way in which clients are organized. We inferred this organization
+by inspecting the source text. This motivates a syntax-directed client analysis.
 
 In particular, we can summarize our analysis of the `Manager` bundle with four
 syntactic patterns. SmartACE does this analysis automatically. The patterns are
@@ -237,12 +240,12 @@ obtain a proof certificate. The
 [certificate](https://arieg.bitbucket.io/pdf/hcvs17.pdf) is given in the form of
 an inductive program invariant. Using the invariant, we can prove that along any
 program path, every assertion holds. Unfortunately, the invariant is given with
-respect to LLVM-bytecode. SmartACE does not yet offer tooling to make the
+respect to LLVM-bitcode. SmartACE does not yet offer tooling to make the
 certificate more readable. Interpreting the certificate requires inspecting the
-LLVM-bytecode, and then mapping the registers back to variables. You can
+LLVM-bitcode, and then mapping the registers back to variables. You can
 take it on good faith that the certificate states:
 
-  1. `Manager.fund.isOpen => called_openFund`
+  1. `Manager.fund.isOpen ==> called_openFund`
   2. `Manager.fund.owner == 1`
 
 Lemma one is straight forward. It states that whenever the guard variable for
@@ -259,3 +262,13 @@ as `Manager.fund.owner == address(Manager)`. This means that the ownership of
 arbitrary clients (i.e., addresses `3` and `4`). We know that `Manager` cannot
 start a transaction, and that only `Manager.fund.owner` can call
 `Manager.fund.open()`, so this lemma blocks all counterexamples to lemma one.
+
+## References
+
+  1. Gurfinkel, A., Meshman, Y., Shoham, S.: SMT-based verification of
+     parameterized systems. FSE. **24**, 338-348 (2016). DOI:
+     https://doi.org/10.1145/2950290.2950330
+
+  2. Namjoshi, K.S., and Trefler, R.J.: Parameterized compositional model
+     checking. TACAS. **22**, 589-606 (2016). DOI:
+     https://doi.org/10.1007/978-3-662-49674-9_39

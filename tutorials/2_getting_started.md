@@ -56,7 +56,7 @@ contract Crowdsale {
 
 A real crowdsale would track each client's contribution through the use of a
 map. We will look at map properties in a future tutorial. For now, let's verify
-that `finish()` and `cancel()` are mutually exclusion.
+that `finish()` and `cancel()` are mutually exclusive.
 
 Our property says that given a valid implementation, `Crowdsale` should never
 move between a *finished* state and *canceled* state. We prove this property by
@@ -66,7 +66,7 @@ The invariant will summarize the concrete states of `Crowdsale`, and imply that
 
 We can instrument this by:
 
-  1. Adding two ghost variable which track when the contract is `finished` or
+  1. Adding two ghost variables which track when the contract is `finished` or
      `canceled`.
   2. Adding a public method which asserts that both ghost variables are never
      true at the same time.

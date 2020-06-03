@@ -18,8 +18,6 @@ In this tutorial, we show how smart contract invariants can be expressed in
 temporal logic, converted into monitors, and then instrumented mechanically.
 This instrumentation will be automated in future versions of SmartACE.
 
-This tutorial requires [Seahorn and clang-format](1_installation.md).
-
 ## Invariants Across Multiple Contracts
 
 The following Solidity program gives a `Fund` contract which can `open()` and
@@ -69,7 +67,9 @@ Let's use SmartACE to see if this invariant really holds.
 ## Encoding the Property
 
 The first step in encoding our property is to state it precisely. Our logic of
-choice is past linear temporal logic (pLTL). We start with an informal statement
+choice is
+[past linear temporal logic](http://fsl.cs.illinois.edu/index.php/Past_Time_Linear_Temporal_Logic)
+(pLTL). We start with an informal statement
 of the property.
 
 > It is *always* the case that if `openFund()` is *not* called even *once*, then
@@ -121,7 +121,7 @@ path/to/solc fund.sol --bundle=Manager --c-model --output-dir=fund
 
 This generates several artifacts:
 
-  * `CMakeLists.txt`: generates make targets for fuzzing, symbolic execution,
+  * `CMakeLists.txt`: generates build targets for fuzzing, symbolic execution,
     simulation, and model checking.
   * `cmodel.c`: provides the model we are verifying.
   * `harness.c`: provides the entry-point (`main`) to the model.
@@ -138,8 +138,10 @@ but we can improve its presentation with `clang-format`:
   * `make run-clang-format`
 
 We highlight four parts of the model: the contract encoding, the method
-encoding, the bundle construction, and the "transaction loop". We start at line
-8, with the contract encoding.
+encoding, the bundle construction, and the "transaction loop". For those
+interested in the model, but do not want to run the tools, the full generated
+model is available here. The line numbers below refer to that model. We start at
+line 8, with the contract encoding.
 
 ```cpp
 struct Fund {
@@ -188,9 +190,9 @@ To summarize briefly, each method prefixed by `nd_` selects a value
 non-deterministically. These values are used to model an arbitrary `msg.sender`,
 and an increasing `block.number` and `block.timestamp`. An attentive reader may
 notice that we restrict addresses to 3 and 4. The importance of this choice, and
-its impact on completeness, are the topic of the next tutorial. For now we can
-think of this as a bounded model with two clients, so at the least, our
-verification is sound.
+its impact on completeness, are the topic of the
+[next tutorial](4_arbitrary_clients.md). For now we can think of this as a
+bounded model with two clients, so at the least, our verification is sound.
 
 At line 108 we then find the "transaction loop" which simulates a sequence of
 transitions:
@@ -225,24 +227,22 @@ We can encode the monitor using three ghost variables and a single assertion.
 We start by declaring each variable at the beginning of `cmodel.c`.
 
 ```cpp
-GHOST_VAR int called_openFund;
-GHOST_VAR sol_uint256_t pre_balance;
-GHOST_VAR sol_uint256_t post_balance;
+GHOST_VAR int g_called_openFund;
+GHOST_VAR sol_uint256_t g_pre_balance;
+GHOST_VAR sol_uint256_t g_post_balance;
 ```
 
-`called_openFund` tracks when `Fund.openFund()` is called. `pre_Fund_balance`
-and `post_Fund_balance` store the values of `BALANCE(FUND)` before and after
-each transaction.  For now `GHOST_VAR` is a placeholder, but will be used for
-analysis specific
-[attributes](https://clang.llvm.org/docs/AttributeReference.html) in a future
-release of SmartACE.
+`g_called_openFund` tracks when `Fund.openFund()` is called.
+`g_pre_Fund_balance` and `g_post_Fund_balance` store the values of
+`BALANCE(FUND)` before and after each transaction.  Note that GHOST_VAR is a
+placeholder for readability, and is ignored by the C compiler.
 
-We return to `Manager_Method_openFund` on line 77, and set `called_openFund` on
+We return to `Manager_Method_openFund` on line 77, and set `g_called_openFund` on
 entry. This is sufficient, as there is a single instance of `Manager`.
 
 ```cpp
 void Manager_Method_openFund(struct Manager *self, /* Blockchain State */) {
-    called_openFund = 1;
+    g_called_openFund = 1;
     Fund_Method_open(&self->user_fund, /* Blockchain State */);
 }
 ```
@@ -256,7 +256,7 @@ observed at least once.
 smartace_log("[Entering transaction loop]");
 while (sol_continue()) {
     sol_on_transaction();
-    pre_balance = contract_1->model_balance;
+    g_pre_balance = contract_1->model_balance;
     /* ... Select non-deterministic blockchain state ... */
     uint8_t next_call = nd_range(0, 5, "next_call");
     switch (next_call) {
@@ -268,8 +268,8 @@ while (sol_continue()) {
     }
     /* ... Other methods ... */
     }
-    post_balance = contract_1->model_balance;
-    sol_assert(called_openFund || pre_balance.v == post_balance.v, "Failure.");
+    g_post_balance = contract_1->model_balance;
+    sol_assert(g_called_openFund || g_pre_balance.v == g_post_balance.v, "Failure.");
 }
 ```
 
@@ -357,4 +357,7 @@ We can now see how this is possible. When `Manager` is constructed, it creates a
 new fund, whose owner is `Manager`. This aligns with the first owner. Client 3
 then `claim()` and takes ownership. This aligns with the second owner. From
 here, client 3 is free to `open()` the contract, and then `deposit()` a single
-Ether. The balance of `Fund` has changed without a call to `openFund()`.
+Ether. The balance of `Fund` has changed without a call to `openFund()`. This
+suggests that all ownership transfers should be approved by the current owner.
+One solution is to remove `claim()` and replace it with an owner-only transfer
+method.
