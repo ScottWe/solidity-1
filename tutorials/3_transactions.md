@@ -188,11 +188,14 @@ Init_Manager(&contract_0, sender, value, blocknum, timestamp, paid, origin);
 
 To summarize briefly, each method prefixed by `nd_` selects a value
 non-deterministically. These values are used to model an arbitrary `msg.sender`,
-and an increasing `block.number` and `block.timestamp`. An attentive reader may
-notice that we restrict addresses to 3 and 4. The importance of this choice, and
-its impact on completeness, are the topic of the
-[next tutorial](4_arbitrary_clients.md). For now we can think of this as a
-bounded model with two clients, so at the least, our verification is sound.
+and an increasing `block.number` and `block.timestamp`. The addresses `0`, `1`
+and `2` are reserved for `address(0)`, `address(Manager)`, and
+`address(Manager.fund)`, respectively. Hence, they are not valid senders.
+However, an attentive reader may notice that we restrict `msg.sender` to `3` and
+`4`. The importance of this choice, and its impact on completeness, are the
+topic of the [next tutorial](4_arbitrary_clients.md). For now we can think of
+this as a bounded model with two clients, so at the least, our verification is
+sound.
 
 At line 108 we then find the "transaction loop" which simulates a sequence of
 transitions:
