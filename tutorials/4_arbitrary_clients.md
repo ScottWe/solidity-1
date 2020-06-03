@@ -135,7 +135,7 @@ against SmartACE by runnings the following commands.
   * `path/to/solc fund.sol --bundle=Manager --c-model --output-dir=fund`
   * `cd fund ; mkdir build ; cd build`
   * `cmake .. -DSEA_PATH=/path/to/seahorn/bin`
-  * `make run-clang-format`
+  * `cmake --build . --target run-clang-format`
 
 As before, we will open `../cmodel.c`. Let's start by inspecting the assignment
 of literal addresses and contract addresses at line 121:
@@ -236,8 +236,8 @@ As for bounded loops, we can unroll them prior to analysis.
 
 ## Proving the Correctness of `Fund` and `Manager`
 
-Now we finish with the running example. As before, we can run `make verify` to
-obtain a proof certificate. The
+Now we finish with the running example. As before, we can run
+`cmake --build . --target verify` to obtain a proof certificate. The
 [certificate](https://arieg.bitbucket.io/pdf/hcvs17.pdf) is given in the form of
 an inductive program invariant. Using the invariant, we can prove that along any
 program path, every assertion holds. Unfortunately, the invariant is given with

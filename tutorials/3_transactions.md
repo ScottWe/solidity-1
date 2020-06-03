@@ -135,7 +135,7 @@ but we can improve its presentation with `clang-format`:
 
   * `mdkir build ; cd build`
   * `cmake .. -DSEA_PATH=/path/to/seahorn/bin`
-  * `make run-clang-format`
+  * `cmake --build . --target run-clang-format`
 
 We highlight four parts of the model: the contract encoding, the method
 encoding, the bundle construction, and the "transaction loop". For those
@@ -278,19 +278,20 @@ while (sol_continue()) {
 
 ## Debugging the Contract
 
-If we run `make verify` on the instrumented contract, we will see that the
-property does not hold. When `Seahorn` detects a violation, it generates a
-counterexample. This counterexample resolves all non-determinism with concrete
-values, and drives the program to an assertion failure. Thankfully, `Seahorn`
-provides these counterexamples as LLVM programs. We can link a counterexample
-against our executable model to produce a debuggable trace (a witness).
+If we run `cmake --build . --target verify` on the instrumented contract, we
+will see that the property does not hold. When `Seahorn` detects a violation, it
+generates a counterexample. This counterexample resolves all non-determinism
+with concrete values, and drives the program to an assertion failure.
+Thankfully, `Seahorn` provides these counterexamples as LLVM programs. We can
+link a counterexample against our executable model to produce a debuggable trace
+(a *witness*).
 
 In practice, we could analyze this trace using a debugger such as `gdb`.
 However, in this example, it is sufficient to read a trace log from the witness.
 Let's reconfigure our example with logging, and then build the witness:
 
   * `cmake .. -DSEA_EXELOG=true`
-  * `make witness`
+  * `cmake --build . --target witness`
   * `./witness`
 
 This gives the trace:
@@ -328,7 +329,7 @@ call `open()` directly. However, this is precisely what happens. To figure out
 why, we can log the owner of `contract_1` during each iteration of the
 transaction loop. After making these changes we can rerun:
 
-  * `make witness`
+  * `cmake --build . --target witness`
   * `./witness`
 
 To obtain the following trace:

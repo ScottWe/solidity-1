@@ -145,7 +145,7 @@ This example requires an installation of `Seahorn` as described
 
   1. `cd mc ; mkdir build ; cd build`
   2. `cmake .. -DSEA_PATH=/path/to/seahorn/bin`
-  3. `make verify`
+  3. `cmake --build . --target  verify`
 
 This will use `Seahorn` to verify the smart contract for an unbounded number of
 clients. The default analysis handles integers arithmetically. That is, overflow
@@ -161,8 +161,8 @@ This example requires support for of `libfuzzer` as described
 [here](1_installation.md). To run the fuzzer:
 
   1. `cd fuzz ; mkdir build ; cd build`
-  2. `cmake .`
-  3. `make fuzz`
+  2. `cmake ..`
+  3. `cmake --build . --target fuzz`
 
 By default, `fuzz` will run `1000000` trials with a timeout of `15` seconds.
 Each trial terminates if a `require` fails. A trial fails if an `assert` fails.
