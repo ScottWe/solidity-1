@@ -124,7 +124,8 @@ the number of contract addresses, address variables, and address arguments in
 each transaction. We find that `Fund.releaseTo(address)` has the maximum address
 footprint, with two contract addresses, one address variable (`owner`) and two
 address arguments (`msg.sender` and `_new`). Therefore, our neighbourhood will
-have 6 addresses.
+have 6 addresses: `address(0)`, `address(Manager)`, `address(Manager.fund)`,
+and the transactional address footprint placeholders.
 
 ### Instrumenting the Restricted Address Set
 
