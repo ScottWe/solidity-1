@@ -73,7 +73,8 @@ We can instrument this by:
 
 The instrumented contract is given below. In later tutorials we will learn to
 mechanically instrument smart contracts from temporal specification. For now,
-save the instrumented contract as `crowdsale.sol`.
+save a copy of the
+[instrumented smart contract](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-2/crowdsale.sol).
 
 ```solidity
 contract Crowdsale {
@@ -125,6 +126,9 @@ You can generate a fuzzer friendly model by running:
 /path/to/install/run/bin/solc crowdsale.sol --bundle=Crowdsale --concrete \
     --reps=5 --c-model --output-dir=fuzz
 ```
+
+A pre-generated snapshot of the output is
+[also available](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-2/).
 
 In future tutorials we will look at the model encoding. For now we focus on the
 parameters to the tool.
