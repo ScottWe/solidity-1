@@ -229,8 +229,8 @@ non-deterministic arguments. The simulation ends if an assertion fails.
 ### Instrumenting the Model
 
 In this section, we will walk through encoding the monitor using three ghost
-variables and a single assertion. The end result is available
-[here](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-3/instrumented/cmodel.c).
+variables and a single assertion. The end result is
+[avialable here](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-3/instrumented/cmodel.c).
 We start by declaring each variable at the beginning of `cmodel.c`.
 
 ```cpp

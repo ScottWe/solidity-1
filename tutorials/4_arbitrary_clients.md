@@ -33,7 +33,9 @@ for which it is initially its owner. The `Manager` exposes a single method,
 `openFund()`, which allows clients to deposit Ether into `Fund`. To fix the
 ownership exploit in the previous example, we have added an `ownerOnly()`
 modifier to the protected interfaces of `Fund`, and have replaced `claim()` with
-`releaseTo(_new)` so that `Manager` must approve ownership transfers.
+`releaseTo(_new)` so that `Manager` must approve ownership transfers. The full
+contract is
+[available here](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-4/fund.sol).
 
 ```solidity
 contract Fund {
@@ -137,6 +139,9 @@ against SmartACE by runnings the following commands.
   * `cmake .. -DSEA_PATH=/path/to/seahorn/bin`
   * `cmake --build . --target run-clang-format`
 
+For those interested in how addresses are modelled, but do not wish to run the
+tools, the full generated model is
+[available here](https://github.com/ScottWe/smartace-examples/tree/master/tutorials/post-4/fund).
 As before, we will open `../cmodel.c`. Let's start by inspecting the assignment
 of literal addresses and contract addresses at line 121:
 
@@ -156,7 +161,7 @@ literals with global variables. These variables are set once, as we see here
 with `global_address_literal_0`. If there were any other address literals, they
 would be assigned non-deterministically, to unique addresses. This captures the
 case where a contract address is used as a literal. To see how the addresses are
-used, we move ahead to line 133:
+used, we move ahead to line 135:
 
 ```cpp
 sender.v = nd_range(3, 6, "sender");
