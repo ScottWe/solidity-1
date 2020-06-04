@@ -140,8 +140,10 @@ but we can improve its presentation with `clang-format`:
 We highlight four parts of the model: the contract encoding, the method
 encoding, the bundle construction, and the "transaction loop". For those
 interested in the model, but do not want to run the tools, the full generated
-model is available here. The line numbers below refer to that model. We start at
-line 8, with the contract encoding.
+model is
+[available here](https://github.com/ScottWe/smartace-examples/tree/master/tutorials/post-3/fund).
+The line numbers below refer to that model. We start at line 8, with the
+contract encoding.
 
 ```cpp
 struct Fund {
@@ -166,7 +168,7 @@ inside the contract which calls `new`. To illustrate, if we defined a contract
 `struct Manager contract_0`, then the balance of `fund` is
 `contract_0.user_fund.model_address`.
 
-Between lines 21 to 86, we then find the encoding of each method. To avoid name
+Between lines 19 to 84, we then find the encoding of each method. To avoid name
 collisions, SmartACE renames each method according to the following rules:
 
   * The constructor of contract `Manager` maps to `Manager_Constructor`.
@@ -226,7 +228,9 @@ non-deterministic arguments. The simulation ends if an assertion fails.
 
 ### Instrumenting the Model
 
-We can encode the monitor using three ghost variables and a single assertion.
+In this section, we will walk through encoding the monitor using three ghost
+variables and a single assertion. The end result is available
+[here](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-3/instrumented/cmodel.c).
 We start by declaring each variable at the beginning of `cmodel.c`.
 
 ```cpp
