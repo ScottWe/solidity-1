@@ -22,8 +22,8 @@ to reduce the parameterized model checking problem to a model with a fixed
 number of clients. We then generalize the results to an arbitrary number of
 clients. In this tutorial, we will return to the `Fund` and `Manager`
 [example](3_transactions.md), and show that its proof certificate extends to any
-number of clients. In the [following tutorials](5_client_data.md), we will
-extend our technique to contracts with mappings of client data.
+number of clients. In the following tutorials, we will extend our technique to
+contracts with mappings of client data.
 
 ## The Contract and Property
 
@@ -100,8 +100,7 @@ benefit from reducing the search space of interleaving client transactions.
 For this reason, let's try proving the property with a fixed number of
 addresses. For convenience, we will refer to the arrangement of clients and
 contracts as a *network topology*, and we will refer to the subset of clients as
-a *neighbourhood*. We will justify these terms in the
-[next tutorial](5_client_data.md).
+a *neighbourhood*. We will justify these terms in the next tutorial.
 
 So what happens when we construct a neighbourhood? If we select too few clients,
 we may lose behaviours from the original bundle (formally, this is an
@@ -185,7 +184,7 @@ interested in the running example can safely skip to the
 ## Reasoning About Clients Through Program Syntax
 
 So far we have seen how to construct a neighbourhood for the `Manager` bundle.
-We argued that the model was complete by appealing to the network's topology,
+We argued that the model was sound by appealing to the network's topology,
 that is, the way in which clients are organized. We inferred this organization
 by inspecting the source text. This motivates a syntax-directed client analysis.
 
@@ -268,6 +267,15 @@ as `Manager.fund.owner == address(Manager)`. This means that the ownership of
 arbitrary clients (i.e., addresses `3` and `4`). We know that `Manager` cannot
 start a transaction, and that only `Manager.fund.owner` can call
 `Manager.fund.open()`, so this lemma blocks all counterexamples to lemma one.
+
+## Conclusion
+
+In this tutorial, we learned how SmartACE generalizes bounded proofs to
+unbounded numbers of clients. We outlined the requirements a smart contract must
+satisfy for this technique to apply. We also learned how the way in which
+SmartACE encodes the addresses can be used to simplify the model. In the next
+tutorial, we will extend these techniques to smart contracts with mapping
+variables.
 
 ## References
 

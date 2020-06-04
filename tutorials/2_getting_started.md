@@ -144,8 +144,10 @@ To view all options execute `/path/to/install/bin/solc --help`.
 
 ## Checking the SmartACE Model
 
-This example requires an installation of `Seahorn` as described
-[here](1_installation.md). To run the model checker:
+[Model checkers](https://arieg.bitbucket.io/pdf/ModelChecking.pdf) can be used
+to validate that a logical representation of a program satisfies some problem.
+This comes at the cost of some abstractions, which we will explore in future
+tutorials. To run the model checker:
 
   1. `cd mc ; mkdir build ; cd build`
   2. `cmake .. -DSEA_PATH=/path/to/seahorn/bin`
@@ -161,8 +163,10 @@ debug a model when `Seahorn` fails to verify the property.
 
 ## Fuzzing the SmartACE Model
 
-This example requires support for of `libfuzzer` as described
-[here](1_installation.md). To run the fuzzer:
+[Fuzz testing](https://llvm.org/docs/LibFuzzer.html) is a form of automated bug
+hunting. Fuzz testing works by generating random inputs, in the hopes of
+violating an assertion. Fuzz tests do not require abstractions, but are limited
+in their coverage. To run the fuzzer:
 
   1. `cd fuzz ; mkdir build ; cd build`
   2. `cmake ..`
@@ -172,3 +176,10 @@ By default, `fuzz` will run `1000000` trials with a timeout of `15` seconds.
 Each trial terminates if a `require` fails. A trial fails if an `assert` fails.
 After a few minutes, all trial will pass, as expected. You will see a summary
 of the tests printed to the console.
+
+## Conclusion
+
+In this tutorial we learned how to use SmartACE to analyze smart contracts with
+assertions. We saw how supporting a spectrum of analysis techniques, such as
+model checking and fuzz testing, can enable different forms of model validation.
+In the next tutorial, we will look closer at model checking in SmartACE.
