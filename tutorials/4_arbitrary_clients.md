@@ -135,7 +135,7 @@ against SmartACE by runnings the following commands.
 
   * `path/to/solc fund.sol --bundle=Manager --c-model --output-dir=fund`
   * `cd fund ; mkdir build ; cd build`
-  * `cmake .. -DSEA_PATH=/path/to/seahorn/bin`
+  * `CC=clang-10 CXX=clang++-10 cmake ..`
   * `cmake --build . --target run-clang-format`
 
 For those interested in how addresses are modelled, but do not wish to run the
@@ -240,15 +240,16 @@ As for bounded loops, we can unroll them prior to analysis.
 
 ## Proving the Correctness of `Fund` and `Manager`
 
-Now we finish with the running example. As before, we can run
-`cmake --build . --target verify` to obtain a proof certificate. The
-[certificate](https://arieg.bitbucket.io/pdf/hcvs17.pdf) is given in the form of
-an inductive program invariant. Using the invariant, we can prove that along any
-program path, every assertion holds. Unfortunately, the invariant is given with
-respect to LLVM-bitcode. SmartACE does not yet offer tooling to make the
-certificate more readable. Interpreting the certificate requires inspecting the
-LLVM-bitcode, and then mapping the registers back to variables. You can
-take it on good faith that the certificate states:
+Now we finish with the running example. Let's start by grabbing a copy of the
+[instrumented model](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-4/instrumented/cmodel.c).
+As before, we can run `cmake --build . --target verify` to obtain a proof
+certificate. The [certificate](https://arieg.bitbucket.io/pdf/hcvs17.pdf) is
+given in the form of an inductive program invariant. Using the invariant, we
+can prove that along any program path, every assertion holds. Unfortunately, the
+invariant is given with respect to LLVM-bitcode. SmartACE does not yet offer
+tooling to make the certificate more readable. Interpreting the certificate
+requires inspecting the LLVM-bitcode, and then mapping the registers back to
+variables. You can take it on good faith that the certificate states:
 
   1. `Manager.fund.isOpen ==> called_openFund`
   2. `Manager.fund.owner == 1`

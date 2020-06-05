@@ -134,7 +134,7 @@ To understand the model, we will focus on `cmodel.c`. This file is unformatted,
 but we can improve its presentation with `clang-format`:
 
   * `mdkir build ; cd build`
-  * `cmake .. -DSEA_PATH=/path/to/seahorn/bin`
+  * `CC=clang-10 CXX=clang++-10 cmake ..`
   * `cmake --build . --target run-clang-format`
 
 We highlight four parts of the model: the contract encoding, the method
@@ -293,7 +293,7 @@ In practice, we could analyze this trace using a debugger such as `gdb`.
 However, in this example, it is sufficient to read a trace log from the witness.
 Let's reconfigure our example with logging, and then build the witness:
 
-  * `cmake .. -DSEA_EXELOG=true`
+  * `CC=clang-10 CXX=clang++-10 cmake .. -DSEA_EXELOG=true`
   * `cmake --build . --target witness`
   * `./witness`
 

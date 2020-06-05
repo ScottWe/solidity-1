@@ -150,7 +150,7 @@ This comes at the cost of some abstractions, which we will explore in future
 tutorials. To run the model checker:
 
   1. `cd mc ; mkdir build ; cd build`
-  2. `cmake .. -DSEA_PATH=/path/to/seahorn/bin`
+  2. `CC=clang-10 CXX=clang++-10 cmake ..`
   3. `cmake --build . --target  verify`
 
 This will use `Seahorn` to verify the smart contract for an unbounded number of
@@ -169,7 +169,7 @@ violating an assertion. Fuzz tests do not require abstractions, but are limited
 in their coverage. To run the fuzzer:
 
   1. `cd fuzz ; mkdir build ; cd build`
-  2. `cmake ..`
+  2. `CC=clang-10 CXX=clang++-10 cmake ..`
   3. `cmake --build . --target fuzz`
 
 By default, `fuzz` will run `1000000` trials with a timeout of `15` seconds.
