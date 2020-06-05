@@ -25,6 +25,9 @@ clients. In this tutorial, we will return to the `Fund` and `Manager`
 number of clients. In the following tutorials, we will extend our technique to
 contracts with mappings of client data.
 
+**Note**: This tutorial assumes all commands are run from within the
+[SmartAce container](2_getting_started.md).
+
 ## The Contract and Property
 
 We now return to the `Manager` bundle given below. As before, we have two
@@ -133,7 +136,7 @@ and the transactional address footprint placeholders.
 SmartACE will construct the neighbourhood automatically. We can compare
 against SmartACE by runnings the following commands.
 
-  * `path/to/solc fund.sol --bundle=Manager --c-model --output-dir=fund`
+  * `solc fund.sol --bundle=Manager --c-model --output-dir=fund`
   * `cd fund ; mkdir build ; cd build`
   * `CC=clang-10 CXX=clang++-10 cmake ..`
   * `cmake --build . --target run-clang-format`

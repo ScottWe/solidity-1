@@ -18,6 +18,9 @@ In this tutorial, we show how smart contract invariants can be expressed in
 temporal logic, converted into monitors, and then instrumented mechanically.
 This instrumentation will be automated in future versions of SmartACE.
 
+**Note**: This tutorial assumes all commands are run from within the
+[SmartAce container](2_getting_started.md).
+
 ## Invariants Across Multiple Contracts
 
 The following Solidity program gives a `Fund` contract which can `open()` and
@@ -116,7 +119,7 @@ structure. Readers only interested in the monitor can
 and then running:
 
 ```
-path/to/solc fund.sol --bundle=Manager --c-model --output-dir=fund
+solc fund.sol --bundle=Manager --c-model --output-dir=fund
 ```
 
 This generates several artifacts:

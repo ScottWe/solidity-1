@@ -22,6 +22,9 @@ to:
   2. Use software model checking to find a representation invariant.
   4. Use fuzz testing to search for violations in the smart contract.
 
+**Note**: This tutorial assumes all commands are run from within the
+[SmartAce container](2_getting_started.md).
+
 ## Instrumenting a Solidity Smart Contract
 
 Let's start with a *crowdsale* smart contract designed to raise `goal` funds by
@@ -116,15 +119,14 @@ contract Crowdsale {
 You can generate a model checking friendly model by running:
 
 ```
-/path/to/install/run/bin/solc crowdsale.sol --bundle=Crowdsale --c-model \
-    --output-dir=mc
+solc crowdsale.sol --bundle=Crowdsale --c-model --output-dir=mc
 ```
 
 You can generate a fuzzer friendly model by running:
 
 ```
-/path/to/install/run/bin/solc crowdsale.sol --bundle=Crowdsale --concrete \
-    --reps=5 --c-model --output-dir=fuzz
+solc crowdsale.sol --bundle=Crowdsale --concrete --reps=5 --c-model \
+    --output-dir=fuzz
 ```
 
 A pre-generated snapshot of the output is
