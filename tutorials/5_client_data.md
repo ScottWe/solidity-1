@@ -290,9 +290,7 @@ Open `cmodel.c`. At line 8 we can find the mapping itself.
 struct Map_1 {
   sol_uint256_t data_0;
   sol_uint256_t data_1;
-  sol_uint256_t data_2;
-  sol_uint256_t data_3;
-  sol_uint256_t data_4;
+  /* ... Other entries ... */
   sol_uint256_t data_5;
 };
 ```
@@ -446,7 +444,7 @@ Write_Map_1(&contract_1->user_investments,
             Init_sol_uint256_t(nd_uint256_t("investments[5]")));
 
 /* Assumes that the compositional invariant holds. */
-sol_require(invariant(&contract_0, &contract_1), "Bad arrangement.");
+sol_require(invariant(&contract_0, contract_1), "Bad arrangement.");
 
 switch (next_call) { /* ... Cases and check ... */ }
 
@@ -457,6 +455,19 @@ This new model replaces entries 3, 4 and 5 with the compositional invariant. If
 this new program is safe, the invariant must be adequate.
 
 ## Proving the Property
+
+Now let's see if the bundle meets its specifications. As before, run:
+
+```
+cmake --build . --target verify
+```
+
+We find that no counterexample exists. However, we are not given a proof
+certificate. At first this may seem like an error, but it is in fact correct. 
+If no certificate is given, then additional invariants are not necessary to
+prove the property. If we look at how we instrumented the property, this isn't
+surprising. Essentially, our property summarizes the operations of
+`Fund.transfer(address,uint256)`, and this follows trivially.
 
 ## Conclusion
 
