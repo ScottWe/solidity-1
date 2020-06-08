@@ -146,13 +146,13 @@ process vertex is assigned to one or more transactions in the `Manager` bundle,
 whereas each data vertex is assigned to a single mapping entry. If a process can
 write to a mapping entry, there is a directed edge from the process vertex to
 the data vertex. If a process can read from a mapping vertex, there is a
-directed edge from the data vertex to the process vertex.
+directed edge from the data vertex to the process vertex [[2](#reference)].
 
 This leads us to the general case of local reasoning. We have a network which is
 parameterized by the number of processes. Each process has access to some finite
 set of shared variables. We will show that all processes accessing the same
 variable obey some compositional invariant. We then combine these invariants to
-find an invariant of the entire network. We can think of the
+find an invariant of the entire network [[2](#reference)]. We can think of the
 [previous tutorial](4_arbitrary_clients.md) as the degenerate case where each
 client has zero mapping entries.
 
@@ -215,7 +215,8 @@ a compositional invariant.
 
 This invariant can be any predicate over the state of the neighbourhood.
 Specifically, it can be aware of the class it is summarizing. However, to be
-compositional, it must also satisfy three properties.
+compositional, it must also satisfy three properties [[1](#reference),
+[2](#reference)].
 
   1. (Initialization) When the neighbourhood is zero-initialized, the zero
      satisfies the invariant.
@@ -233,7 +234,7 @@ of execution.
 While compositionality ensures that we are complete, it does not necessarily
 ensure soundness. If our summary is too weak, it might permit counterexamples
 which do not exist in the original bundle. We say that a compositional invariant
-is *adequate* if it additionally blocks all counterexamples.
+is *adequate* if it additionally blocks all counterexamples [[2](#reference)].
 
 We can use the insight of compositional invariants to better justify our
 restricted address values in the [previous tutorial](4_arbitrary_clients.md). As
@@ -478,3 +479,11 @@ trivial compositional invariant. In the next tutorial, we will look at verifying
 more difficult properties against non-trivial compositional invariants.
 
 ## References
+
+  1. Gurfinkel, A., Meshman, Y., Shoham, S.: SMT-based verification of
+     parameterized systems. FSE. **24**, 338-348 (2016). DOI:
+     https://doi.org/10.1145/2950290.2950330
+
+  2. Namjoshi, K.S., and Trefler, R.J.: Parameterized compositional model
+     checking. TACAS. **22**, 589-606 (2016). DOI:
+     https://doi.org/10.1007/978-3-662-49674-9_39
