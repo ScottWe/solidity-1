@@ -11,15 +11,15 @@ categories: [smartace, verification, model checking, local reasoning]
 [Last time](4_arbitrary_clients.md) we used SmartACE to prove safety properties
 for any number of clients. The example was by no means trivial, but it was in
 many ways a toy. Namely, the `Manager` bundle we analyzed did not keep mappings
-from client addresses to client data. In such cases we must
-summarize both the client addresses and the client data.
+from client addresses to client data. In such cases we must summarize both the
+client addresses and the client data.
 
 In this tutorial we will prove a simple invariant with client data. First, we
-extend the `Manager` bundle to use maps, and describe the property of interest.
-We then revisit network topology to better understand the impact of client data.
-Using this insight, we then work on summarizing the client data. Finally, we
-show how SmartACE applies this theory in practice, and then use it to verify our
-new property.
+will extend the `Manager` bundle to use maps, and describe our property of
+interest. We will then revisit network topology to better understand the impact
+of client data. Using this insight, we will then work on summarizing the client
+data. Finally, we will show how SmartACE applies this theory in practice, and
+then use it to verify our new property.
 
 **Note**: This tutorial assumes all commands are run from within the
 [SmartAce container](1_installation.md). All tutorial files are available within
@@ -27,18 +27,20 @@ the container from the home directory.
 
 ## Extending Our Running Example
 
-Let's start by returning to the `Manager` bundle. To briefly recap, the
-`Manager` bundle consists of two smart contracts: a `Fund` for clients to
+We start by returning to the `Manager` bundle. To briefly recap, the `Manager`
+bundle consists of two smart contracts: a `Fund` contract into which clients
 `deposit()` Ether, and a `Manager` which owns and controls access to the `Fund`.
 In the past two tutorials we
 [identified an ownership exploit](3_transactions.md), patched the bug, and then
 [verified its absence for any number of clients](4_arbitrary_clients.md).
 
-We now wish to move on to mapping properties. To keep our example realistic, we
-add an `investment` mapping to `Fund` which tracks how much Ether each client
-deposits. We add a `Fund.transfer(address, uint256)` method which allows a
-client to relinquish `_amount` Ether to `_destination`. The new contract is
-given below:
+We now extend the `Manager` bundle to make use of 
+Let's extend the `Manager` bundle to make use of mappings. To keep our example
+realistic, we mimic [ERC-20 tokens](https://eips.ethereum.org/EIPS/eip-20).
+First we add an `invested` mapping onto `Fund` to track the total deposits of
+each client. Next, we add a `Fund.transfer(address, uint256)` method to allow a
+client to transfer `_amount` Ether to `_destination`. The new contract is given
+below:
 
 ```solidity
 contract Fund {
@@ -81,28 +83,26 @@ contract Manager {
 }
 ```
 
-We can now consider local client properties. In these properties, taken an
-invariant for a small set of properties. For example, the total investment for
-two fixed clients is conserved after calling `Fund.transfer(address, uint256)`.
-We can then extend this into a local client property by requiring that for any
-two clients, their total investments are conserved by
-`Fund.transfer(address, uint256)`. In fact, this will be our running example for
-the remainder of the tutorial. In past linear temporal logic (pLTL) we would
-say:
+We can now pose local client properties about the bundle. These are properties
+which give invariants over fixed size subsets of clients. For example, we could
+specify that the investments of any two clients are conserved across calls to
+`Fund.transfer(address, uint256)`. This property will be our running example for
+the remainder of the tutorial. We specify the property in past linear temporal
+logic (pLTL) by writing:
 
 > It is *always* the case that whenever `msg.sender` calls `Fund.transfer()` and
-> sends `_amount` to some other `_dst`, then `Fund.invested[msg.sender]` is
-> decreased by  `_amount` while  `Fund.invested[_destination]` is increased by
-> `_amount`.
+> sends `_amount` to some other client `_dst`, then `Fund.invested[msg.sender]`
+> is decreased by  `_amount` while  `Fund.invested[_destination]` is increased
+> by `_amount`.
 
-We then formalize the property in the
-[VerX Specification Language](https://verx.ch/docs/spec.html). Recall that
-`FUNCTION` is the name of the last method called, while `prev(v)` is the value
-of `v` before `FUNCTION` was called. `once` and `always` are pLTL operators,
-where `once(p)` is true if `p` has ever been true while `always(p)` is true if
-`p` has always been true. We write `Fund.transfer(address, uint256)[i]` to refer
-to the i-th argument passed to `Fund.transfer(address, uint256)`. This gives the
-formalization:
+We then formalize the property using the
+[VerX Specification Language](https://verx.ch/docs/spec.html), As presented in
+[tutorial 3](3_transactions.md). Recall that `FUNCTION` is the name of the last
+method called, while `prev(v)` is the value of `v` before `FUNCTION` was called.
+`once` and `always` are pLTL operators, where `once(p)` is true if `p` has ever
+been true while `always(p)` is true if `p` has always been true. We write
+`Fund.transfer(address, uint256)[i]` to refer to the i-th argument passed to
+`Fund.transfer(address, uint256)`. This gives the formalization:
 
 ```
 always(
@@ -124,9 +124,9 @@ always(
 )
 ```
 
-As a final step, we can constructor a monitor for the property. The monitor will
-detect if the property becomes violated, and will allow us to verify the claim.
-Our property is essentially a functional post-condition, so the monitor is very
+As a final step, we can constructor a monitor for the property. The monitor
+detects if the property is violated, and allows us to verify the claim. Our
+property is essentially a functional post-condition, so the monitor is very
 compact. First we introduce the following predicates:
 
   * `is_transfer := FUNCTION == Fund.transfer`
@@ -141,24 +141,25 @@ And then give the regular expression
 
 Mappings allow us to associated variables with clients. This fundamentally
 changes the `Manager` bundle topology. We can think of this new topology as a
-graph with two types of vertices: *process vertices* and *data vertices*. Each
-process vertex is assigned to one or more transactions in the `Manager` bundle,
-whereas each data vertex is assigned to a single mapping entry. If a process can
-write to a mapping entry, there is a directed edge from the process vertex to
-the data vertex. If a process can read from a mapping vertex, there is a
-directed edge from the data vertex to the process vertex [[2](#reference)].
+graph with two types of vertices: *process vertices* and *data vertices*
+[[2](#reference)]. Each process vertex is assigned to one or more transactions
+in the `Manager` bundle, whereas each data vertex is assigned to a single
+mapping entry. If a process can write to a mapping entry, there is a directed
+edge from the process vertex to the data vertex. If a process can read from a
+mapping vertex, there is a directed edge from the data vertex to the process
+vertex.
 
 This leads us to the general case of local reasoning. We have a network which is
 parameterized by the number of processes. Each process has access to some finite
-set of shared variables. We will show that all processes accessing the same
-variable obey some compositional invariant. We then combine these invariants to
-find an invariant of the entire network [[2](#reference)]. We can think of the
+set of shared variables. We want to show that all processes accessing the same
+variable obey some invariant. We then combine these invariants to find an
+invariant of the entire network [[2](#reference)]. We can think of the
 [previous tutorial](4_arbitrary_clients.md) as the degenerate case where each
 client has zero mapping entries.
 
 ### Topology in the `Manager` Bundle
 
-First we need to characterize the `Manager` bundle topology. We will do this by
+First we need to characterize the `Manager` bundle topology. We start this by
 looking at a given *instance* of the bundle. That is, the topology of the bundle
 for a fixed number of clients. We will see that the topology exhibits symmetries
 which generalize to any number of clients.
@@ -167,8 +168,8 @@ To begin, let's fix the number of clients and consider an arbitrary instance. We
 saw in the [previous tutorial](4_arbitrary_clients.md) that each transaction can
 touch at most 6 clients at once. Three of these clients are fixed, namely
 `address(0)`, `address(Fund)`, and `address(Manager)`. If we fix the final three
-clients, we obtain a subset of transactions. If we enumerate all client choices,
-we enumerate all possible transactions.
+clients, we obtain a subset of the possible transactions. If we enumerate all
+client choices, we enumerate all possible transactions.
 
 We can use this intuition to assign transitions to processes. First we select
 one such subset of clients. We then take the transactions whose addresses are
@@ -187,13 +188,13 @@ modifier restrictClients(address _client) {
 ```
 
 After restricting the clients, we then assign the transactions to a unique
-process vertex. From this vertex, we connect edges to data vertices of each
-client. If we repeat this process for each subset of clients, we will map every
-transaction onto some process in the network topology.
+process vertex. From this vertex, we add edges to the data vertices of each
+client. If we repeat this process for each subset of clients, we assign every
+transaction to some process vertex in the network topology.
 
 To illustrate this construction, and to highlight its symmetry, we give the
 graphs for 6 and 7 clients. To improve readability, we do not show the data
-vertices common to all processes. We name the arbitrary address `A1`, `A2`,
+vertices shared by all processes. We name the arbitrary address `A1`, `A2`,
 `A3`, and `A4` to stress the point that each address is strictly an identifier.
 The topology for 6 clients is:
 
@@ -205,8 +206,8 @@ The topology for 7 clients is:
 
 ### Compositional Invariants in the `Manager` Bundle
 
-Local reasoning allows us to take a sufficiently large neighbourhood, against
-which we can then prove properties for the entire network. We do this in two
+Local reasoning allows us to find a sufficiently large neighbourhood, against
+which we can then prove properties for all possible networks. We do this in two
 steps. First, we no longer think of each data vertex as belonging to a single
 client. Instead, we now let it represent a group of similar clients (formally,
 this is an *equivalence class*). We then replace each data vertex with an
@@ -214,15 +215,15 @@ invariant which summarizes all possible values at the vertex. We call this
 a compositional invariant.
 
 This invariant can be any predicate over the state of the neighbourhood.
-Specifically, it can be aware of the class it is summarizing. However, to be
-compositional, it must also satisfy three properties [[1](#reference),
+Specifically, it can be aware of the client class it is summarizing. However, to
+be compositional, it must also satisfy three properties [[1](#reference),
 [2](#reference)].
 
-  1. (Initialization) When the neighbourhood is zero-initialized, the zero
-     satisfies the invariant.
-  2. (Transaction) If the invariant holds of some clients before they perform a
+  1. (Initialization) When the neighbourhood is zero-initialized, the data
+     vertices satisfy the invariant.
+  2. (Transaction) If the invariant holds for some clients before they perform a
      transaction, the invariant still holds afterwards.
-  3. (Non-interference) If the invariant holds of some client, the actions of
+  3. (Non-interference) If the invariant holds for some client, the actions of
      any other clients cannot break it.
 
 In other words, the compositional invariant holds initially, and is never
@@ -234,7 +235,7 @@ of execution.
 While compositionality ensures that we are complete, it does not necessarily
 ensure soundness. If our summary is too weak, it might permit counterexamples
 which do not exist in the original bundle. We say that a compositional invariant
-is *adequate* if it additionally blocks all counterexamples [[2](#reference)].
+is *adequate* if it blocks all such counterexamples [[2](#reference)].
 
 We can use the insight of compositional invariants to better justify our
 restricted address values in the [previous tutorial](4_arbitrary_clients.md). As
@@ -243,17 +244,17 @@ no longer meaningful. Instead, what matters are the relationships satisfied by
 two or more addresses. We used the program syntax to identify that only equality
 mattered, and then we constructed a set of address values which could satisfy
 this relation (formally, we created an *abstract domain* of addresses). We then
-ensured adequacy by blocking trivial counterexamples (i.e., no two contracts
-have the same address).
+ensured adequacy by blocking trivial counterexamples (i.e., contract addresses
+are distinct from client addresses).
 
 ### Local Reasoning in SmartACE
 
 When we apply local reasoning in SmartACE, we partition the addresses into
-*representatives* and *interference*. Representative addresses are used when the
-address must refer to a single client, such as a literal address or a contract
-address. Interference addresses are used when the address does not refer to a
-distinct client. This distinction is important, as at any point during analysis,
-we know the exact value of each representative vertex.
+*representative* addresses and *interference* addresses. Representatives are
+used when the address must refer to a single client, such as a literal address
+or a contract address. Interference addresses are used when the address does not
+refer to a distinct client. This distinction is important, as at any point
+during analysis, we know the exact value of each representative vertex.
 
 [TODO: perhaps we should change the terminology to "distinguished" and
 "representative". Distinguished (currently representative[OLD]) addresses are
@@ -263,19 +264,19 @@ the "representative of an equivalence class".]
 
 Before applying local reasoning, SmartACE requires three parameters: the number
 of representative addresses, the number of interference addresses, and a
-candidate invariant. SmartACE will discover the minimum number of representative
-and interference addresses automatically, using the techniques outlined in the
+candidate invariant. SmartACE automatically discovers the minimum number of
+representative and interference addresses, using the techniques outlined in the
 [previous tutorial](4_arbitrary_clients.md). Conversely, the candidate invariant
-must be provided manually. SmartACE will verify that the candidate is both
-compositional and adequate. In the future, SmartACE will also automate searching
-for the invariant.
+must be provided manually. SmartACE then ensures that the candidate is both
+compositional and adequate. In the future, SmartACE will also automate invariant
+selection.
 
-As an example, we will now walk through verifying a candidate invariant. We
-start with the weakest candidate, namely `True`. As `True` implies `True`, this
+As an example, we now walk through verifying a candidate invariant. We start
+with the weakest candidate, namely `True`. As `True` implies `True`, this
 candidate is compositional by definition. Instead, we can focus entirely on
-adequacy. We will do this in two steps. The next section takes a detour and will
-briefly outline how maps are modelled in SmartACE. The following section walks
-through adequacy checks in SmartACE. With this in mind, let's start by
+adequacy. We do this across two sections. The first section takes a detour and
+briefly outline how maps are modelled in SmartACE. The second section walks
+through adequacy checks in SmartACE. With these goals in mind, let's start by
 generating the model:
 
   * `solc fund.sol --bundle=Manager --c-model --output-dir=fund`
@@ -304,7 +305,7 @@ For addresses `3` to `5`, however, the entries are interference and need not
 persist across neighbourhoods. This insight will be important once we instrument
 the model.
 
-Moving to lines 147 to 181, we will find the operations defined on the mapping.
+Moving to lines 147 to 181, we find the operations defined on the mapping.
 
 ```cpp
 sol_uint256_t Read_Map_1(struct Map_1 *arr, sol_address_t key_0) {
@@ -333,13 +334,9 @@ void Write_Map_1(struct Map_1 *arr, sol_address_t key_0, sol_uint256_t dat) {
 }
 ```
 
-The `Read_Map_` and `Write_Map_` are used to read from and write to mappings. We
-chose to use structures and methods over C-style arrays for two reasons. First,
-C-style arrays do not permit for statically sized, multi-dimensional arrays,
-whereas structures can easily encode any statically sized data type. Second, the
-use of the `Read_Map_` and `Write_Map_` allow for SmartACE to easily instrument
-mapping accesses. We will see in the next tutorial that write instrumentation
-allows us to reason locally about global mapping sums.
+By wrapping mapping accesses in function calls, SmartACE can easily instrument
+all mapping accesses. We will see in a future tutorial how write instrumentation
+allows us to reason locally about sums across mappings.
 
 #### Instrumenting the Model
 
@@ -349,17 +346,17 @@ the adequacy check. There are two parts to the adequacy check:
   1. We must instrument the property, just as we have done in
      [previous tutorials](3_transactions.md).
   2. Before each transaction, we must place new values in each interference
-     entry.
+     entry of `Fund.invested`.
 
 If we were to stop after step one, we would be left with a bounded model, just
 as we had constructed in [tutorial 3](3_transactions.md). To generalize this to
-an arbitrary number of clients, we must begin each transaction by placing new
-values at each interference entry. Intuitively, we can think of this as allowing
-a new client from the same client group to make a move. Let's see how this looks
-in practice.
+an arbitrary number of clients, we must begin each transaction with new values
+at each interference vertex. Intuitively, we can think of this as allowing a new
+client from the same client group to make a move. Let's see how this looks in
+practice.
 
-In general, we must instrument the property against any arbitrary clients. In
-fact, we will see an example of this in the next tutorial. However, in our
+In general, we must instrument the property against any arbitrary clients. We
+will see an example of this in the next tutorial. However, for our simple
 property, the clients are not arbitrary. They are bounded to the sender and
 recipient of each `Fund.transfer(address,uint256)` call. Given this insight, we
 first add global ghost variables to track the pre- and post-investments of both
@@ -408,7 +405,7 @@ void Fund_Method_transfer(/* Blockchain state */,
 ```
 
 Next we instrument the transaction loop. At the start of each transaction, we
-must select a process to run the transaction. Since the processes in our network
+select a process to run the transaction. Since the processes in our network
 model are conceptual, this equates to initializing a new neighbourhood. We know
 that representative clients are shared between all neighbourhoods, so this
 reduces to selecting new values for all interference vertices. We make this
@@ -416,7 +413,7 @@ selection in accordance with the compositional invariant.
 
 First, let's make the compositional invariant concrete. By definition, the
 compositional invariant is a predicate over process configurations. Therefore,
-we add the following definition at the top of `cmodel.c`:
+we add the following definition to `cmodel.c`:
 
 ```cpp
 // The `True` compositional invariant.
@@ -429,8 +426,8 @@ int invariant(struct Manager *c0, struct Fund *c1)
 }
 ```
 
-Now let's populate the interference vertices. We will do this before dispatching
-the transaction in the transaction loop. Navigate to line 240:
+Now let's populate the interference vertices. We will do this before running the
+transaction. Navigate to line 240 and add the following:
 
 ```cpp
 /* Updates the interference vertices. */
