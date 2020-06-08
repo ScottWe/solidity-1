@@ -471,4 +471,10 @@ surprising. Essentially, our property summarizes the operations of
 
 ## Conclusion
 
+In this tutorial, we learned how SmartACE models bundles with client-owned data.
+We were introduced to compositional invariants and adequacy checks. Using these
+techniques, we verified a property over all pairs of mapping entires against a
+trivial compositional invariant. In the next tutorial, we will look at verifying
+more difficult properties against non-trivial compositional invariants.
+
 ## References
