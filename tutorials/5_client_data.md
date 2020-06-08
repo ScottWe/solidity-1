@@ -14,12 +14,16 @@ many ways a toy. Namely, the `Manager` bundle we analyzed did not keep mappings
 from client addresses to client data. In such cases we must
 summarize both the client addresses and the client data.
 
-In this post we will prove a simple invariant with client data. First, we extend
-the `Manager` bundle to use maps, and describe the property of interest. We then
-revisit network topology to better understand the impact of client data. Using
-this insight, we then work on summarizing the client data. Finally, we show how
-SmartACE applies this theory in practice, and then use it to verify our new
-property.
+In this tutorial we will prove a simple invariant with client data. First, we
+extend the `Manager` bundle to use maps, and describe the property of interest.
+We then revisit network topology to better understand the impact of client data.
+Using this insight, we then work on summarizing the client data. Finally, we
+show how SmartACE applies this theory in practice, and then use it to verify our
+new property.
+
+**Note**: This tutorial assumes all commands are run from within the
+[SmartAce container](1_installation.md). All tutorial files are available within
+the container from the home directory.
 
 ## Extending Our Running Example
 
@@ -153,11 +157,11 @@ for a fixed number of clients. We will see that the topology exhibits symmetries
 which generalize to any number of clients.
 
 To begin, let's fix the number of clients and consider an arbitrary instance. We
-saw in the previous tutorial that each transaction can touch at most 6 clients
-at once. Three of these clients are fixed, namely `address(0)`, `address(Fund)`,
-and `address(Manager)`. If we fix the final three clients, we obtain a subset of
-transactions. If we enumerate all client choices, we enumerate all possible
-transactions.
+saw in the [previous tutorial](4_arbitrary_clients.md) that each transaction can
+touch at most 6 clients at once. Three of these clients are fixed, namely
+`address(0)`, `address(Fund)`, and `address(Manager)`. If we fix the final three
+clients, we obtain a subset of transactions. If we enumerate all client choices,
+we enumerate all possible transactions.
 
 We can use this intuition to assign transitions to processes. First we select
 one such subset of clients. We then take the transactions whose addresses are
@@ -266,10 +270,10 @@ briefly outline how maps are modelled in SmartACE. The following section walks
 through adequacy checks in SmartACE. With this in mind, let's start by
 generating the model:
 
-  * `path/to/solc fund.sol --bundle=Manager --c-model --output-dir=fund`
+  * `solc fund.sol --bundle=Manager --c-model --output-dir=fund`
   * `cd fund ; mkdir build ; cd build`
-  * `cmake .. -DSEA_PATH=/path/to/seahorn/bin`
-  * `make run-clang-format`
+  * `CC=clang-10 CXX=clang++-10 cmake ..`
+  * `cmake --build . --target run-clang-format`
 
 #### Mappings in SmartACE
 
@@ -302,12 +306,12 @@ sol_uint256_t Read_Map_1(struct Map_1 *arr, sol_address_t key_0) {
   {
     return arr->data_5;
   }
-  /* ... other cases ... */
+  /* ... Other cases ... */
   else if (0 == key_0.v)
   {
     return arr->data_0;
   }
-  /* ... unreachable error case ... */
+  /* ... Unreachable error case ... */
 }
 
 void Write_Map_1(struct Map_1 *arr, sol_address_t key_0, sol_uint256_t dat) {
@@ -315,7 +319,7 @@ void Write_Map_1(struct Map_1 *arr, sol_address_t key_0, sol_uint256_t dat) {
   {
     arr->data_5 = dat;
   }
-  /* ... other cases ... */
+  /* ... Other cases ... */
   else if (0 == key_0.v)
   {
     arr->data_0 = dat;
@@ -333,24 +337,27 @@ allows us to reason locally about global mapping sums.
 
 #### Instrumenting the Model
 
-Now that we understand SmartACE mappings, we are ready to instrument the
-adequacy check. There are two parts to the adequacy check.
+Now that we understand how SmartACE models a mapping, we are ready to instrument
+the adequacy check. There are two parts to the adequacy check:
 
-  1. We must instrument the property, just as we have done in previous examples.
-  2. We must select new interference data entries before each transaction.
+  1. We must instrument the property, just as we have done in
+     [previous tutorials](3_transactions.md).
+  2. Before each transaction, we must place new values in each interference
+     entry.
 
 If we were to stop after step one, we would be left with a bounded model, just
 as we had constructed in [tutorial 3](3_transactions.md). To generalize this to
-an arbitrary number of clients, we must "select" a new interference before each
-transaction. Intuitively, we can think of this as allowing a new client from the
-same client group to make a move. Let's see how this looks in practice.
+an arbitrary number of clients, we must begin each transaction by placing new
+values at each interference entry. Intuitively, we can think of this as allowing
+a new client from the same client group to make a move. Let's see how this looks
+in practice.
 
-In general, step one requires checking the property against any arbitrary client
-after the transaction has executed. We will see an example of this in the next
-tutorial. In case of our property, the clients are not arbitrary. They are
-bounded to the sender and recipient of each `Fund.transfer(address,uint256)`
-call. First we add global ghost variables to track the pre- and post-investments
-of both clients:
+In general, we must instrument the property against any arbitrary clients. In
+fact, we will see an example of this in the next tutorial. However, in our
+property, the clients are not arbitrary. They are bounded to the sender and
+recipient of each `Fund.transfer(address,uint256)` call. Given this insight, we
+first add global ghost variables to track the pre- and post-investments of both
+clients:
 
 ```cpp
 GHOST_VAR sol_uint256_t sender_pre;
@@ -371,24 +378,24 @@ case 5: {
   sender_pre = Read_Map_1(&contract_1->user_investments, sender);
   recipient_pre = Read_Map_1(&contract_1->user_investments, arg__destination);
   /* [ END ] INSTRUMENTATION */
-  Fund_Method_transfer(/* ... call data ... */, arg__destination, arg__amount);
+  Fund_Method_transfer(/* Blockchain state */, arg__destination, arg__amount);
   /* [START] INSTRUMENTATION */
   sender_post = Read_Map_1(&contract_1->user_investments, sender);
   recipient_post = Read_Map_1(&contract_1->user_investments, arg__destination);
-  sol_assert(sender_pre.v == sender_post.v + arg__amount.v, "Fail.");
-  sol_assert(recipient_post.v == recipient_pre.v + arg__amount.v, "Fail.");
+  sol_assert(sender_pre.v == sender_post.v + arg__amount.v, "Failure.");
+  sol_assert(recipient_post.v == recipient_pre.v + arg__amount.v, "Failure.");
   /* [ END ] INSTRUMENTATION */
   smartace_log("...");
   break;
 }
 ```
 
-Now we must instrument the transactional loop to select a new process before
-each transaction. Since the processes in our network model are conceptual, this
-equates to initializing a new neighbourhood. We know that representative clients
-are shared between all neighbourhoods, so this equates to selecting new values
-for all interference vertices. We make this selection in accordance with the
-compositional invariant.
+Next we instrument the transaction loop. At the start of each transaction, we
+must select a process to run the transaction. Since the processes in our network
+model are conceptual, this equates to initializing a new neighbourhood. We know
+that representative clients are shared between all neighbourhoods, so this
+reduces to selecting new values for all interference vertices. We make this
+selection in accordance with the compositional invariant.
 
 First, let's make the compositional invariant concrete. By definition, the
 compositional invariant is a predicate over process configurations. Therefore,
@@ -396,7 +403,7 @@ we add the following definition at the top of `cmodel.c`:
 
 ```cpp
 // The `True` compositional invariant.
-int compositional_invariant(struct Manager *c0, struct Fund *c1)
+int invariant(struct Manager *c0, struct Fund *c1)
 {
   // We ignore the process state...
   (void) c0; (void) c1;
@@ -404,5 +411,31 @@ int compositional_invariant(struct Manager *c0, struct Fund *c1)
   return 1;
 }
 ```
+
+Now let's populate the interference vertices. We will do this before dispatching
+the transaction in the transaction loop. Navigate to line 240:
+
+```cpp
+/* Updates the interference vertices. */
+Write_Map_1(&contract_1->user_investments,
+            Init_sol_address_t(3),
+            Init_sol_uint256_t(nd_uint256_t("investments[3]")));
+Write_Map_1(&contract_1->user_investments,
+            Init_sol_address_t(4),
+            Init_sol_uint256_t(nd_uint256_t("investments[4]")));
+Write_Map_1(&contract_1->user_investments,
+            Init_sol_address_t(5),
+            Init_sol_uint256_t(nd_uint256_t("investments[5]")));
+
+/* Assumes that the compositional invariant holds. */
+sol_require(invariant(&contract_0, &contract_1), "Bad arrangement.");
+
+switch (next_call) { /* ... Cases and check ... */ }
+
+/* The invariant is `True`, so it trivially hold afterwards. */
+```
+
+This new model replaces entries 3, 4 and 5 with the compositional invariant. If
+this new program is safe, the invariant must be adequate.
 
 ## Proving the Property
