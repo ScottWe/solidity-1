@@ -91,8 +91,9 @@ the remainder of the tutorial. In past linear temporal logic (pLTL) we would
 say:
 
 > It is *always* the case that whenever `msg.sender` calls `Fund.transfer()` and
-> sends `_amount` to `_dst`, then `Fund.invested[msg.sender]` is decreased by
-> `_amount` while  `Fund.invested[_destination]` is increased by `_amount`.
+> sends `_amount` to some other `_dst`, then `Fund.invested[msg.sender]` is
+> decreased by  `_amount` while  `Fund.invested[_destination]` is increased by
+> `_amount`.
 
 We then formalize the property in the
 [VerX Specification Language](https://verx.ch/docs/spec.html). Recall that
@@ -105,10 +106,14 @@ formalization:
 
 ```
 always(
-    (FUNCTION == Fund.transfer)
+    (
+        (FUNCTION == Fund.transfer)
+        &&
+        (msg.sender != Fund.transfer(address,uint256)[0])
+    )
     ==>
     (
-        (Fund.invested[msg.sender]
+      (Fund.invested[msg.sender]
             + Fund.transfer(address,uint256)[1]
             == prev(Fund.invested[msg.sender]))
         &&
@@ -125,10 +130,12 @@ Our property is essentially a functional post-condition, so the monitor is very
 compact. First we introduce the following predicates:
 
   * `is_transfer := FUNCTION == Fund.transfer`
+  * `distinct := msg.sender != _destination`
   * `sent := invested[msg.sender] + _amount = prev(invested[msg.sender])`
   * `recv := prev(invested[_destination]) + _amount = prev(invested[_destination]`
 
-And then give the regular expression `(!is_transfer || (send && recv)) *`.
+And then give the regular expression
+`(!(is_transfer && distinct) || (send && recv))*`.
 
 ## Local Reasoning Over Client Mappings
 
@@ -360,33 +367,44 @@ first add global ghost variables to track the pre- and post-investments of both
 clients:
 
 ```cpp
-GHOST_VAR sol_uint256_t sender_pre;
-GHOST_VAR sol_uint256_t sender_post;
 GHOST_VAR sol_uint256_t recipient_pre;
 GHOST_VAR sol_uint256_t recipient_post;
+GHOST_VAR sol_uint256_t sender_pre;
+GHOST_VAR sol_uint256_t sender_post;
 ```
 
-We then instrument the check in the `Fund.transfer(address,uint256)` transaction
-at line 278:
+We then instrument the check in `Fund.transfer(address,uint256)` at line 105:
 
 ```cpp
-case 5: {
-  smartace_log("...");
-  sol_address_t arg__destination = Init_sol_address_t(nd_range(0, 6, ""));
-  sol_uint256_t arg__amount = Init_sol_uint256_t(nd_uint256_t(""));
+void Fund_Method_transfer(/* Blockchain state */,
+                          sol_address_t func_user___destination,
+                          sol_uint256_t func_user___amount) {
+  sol_uint256_t dest_bal = Read_Map_1(&self->user_invested, func_user___destination);
+  sol_uint256_t sender_bal = Read_Map_1(&self->user_invested, sender);
+
   /* [START] INSTRUMENTATION */
-  sender_pre = Read_Map_1(&contract_1->user_investments, sender);
-  recipient_pre = Read_Map_1(&contract_1->user_investments, arg__destination);
+  recipient_pre = dest_bal;
+  sender_pre = sender_bal;
   /* [ END ] INSTRUMENTATION */
-  Fund_Method_transfer(/* Blockchain state */, arg__destination, arg__amount);
+
+  sol_require(func_user___amount.v > 0, 0);
+  sol_require(dest_bal.v + func_user___amount.v > dest_bal.v, "Require failed.");
+  sol_require(sender_bal.v >= func_user___amount.v, "Require failed.");
+
+  Write_Map_1(&self->user_invested, sender,
+              Init_sol_uint256_t(sender_bal.v - func_user___amount.v));
+  Write_Map_1(&self->user_invested, func_user___destination,
+              Init_sol_uint256_t(dest_bal.v + unc_user___amount.v));
+
   /* [START] INSTRUMENTATION */
-  sender_post = Read_Map_1(&contract_1->user_investments, sender);
-  recipient_post = Read_Map_1(&contract_1->user_investments, arg__destination);
-  sol_assert(sender_pre.v == sender_post.v + arg__amount.v, "Failure.");
-  sol_assert(recipient_post.v == recipient_pre.v + arg__amount.v, "Failure.");
+  sender_post = Read_Map_1(&self->user_invested, sender);
+  recipient_post = Read_Map_1(&self->user_invested, func_user___destination);
+  if (sender.v != func_user___destination.v)
+  {
+    sol_assert(sender_pre.v == sender_post.v + func_user___amount.v, "Failure.");
+    sol_assert(recipient_post.v == recipient_pre.v + func_user___amount.v, "Failure.");
+  }
   /* [ END ] INSTRUMENTATION */
-  smartace_log("...");
-  break;
 }
 ```
 
@@ -439,3 +457,7 @@ This new model replaces entries 3, 4 and 5 with the compositional invariant. If
 this new program is safe, the invariant must be adequate.
 
 ## Proving the Property
+
+## Conclusion
+
+## References
