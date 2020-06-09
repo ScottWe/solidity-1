@@ -26,7 +26,8 @@ number of clients. In the following tutorials, we will extend our technique to
 contracts with mappings of client data.
 
 **Note**: This tutorial assumes all commands are run from within the
-[SmartAce container](2_getting_started.md).
+[SmartAce container](1_installation.md). All tutorial files are available within
+the container from the home directory.
 
 ## The Contract and Property
 

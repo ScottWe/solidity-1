@@ -8,8 +8,10 @@ categories: [smartace, install]
 # 1. Installing SmartACE
 
 SmartACE can be built from source, or obtained as a pre-built Docker container.
-For end-users of SmartAce, we **strongly recommend** Docker as the
+For end-users of SmartACE, we **strongly recommend** Docker as the
 [choice of installation](#setup-through-docker).
+
+Note that currently, SmartACE is locked at Solidity version `0.5.9`.
 
 ## Building from Source
 
@@ -65,13 +67,13 @@ time using Docker, start by installing the client for
 Next, pull that latest version of SmartACE from DockerHub by running:
 
 ```
-docker pull smartace/smartace
+docker pull seahorn/smartace:arak
 ```
 
 Now `cd` to the directory you wish to use SmartACE from. Run:
 
 ```
-sudo docker run -v $(pwd):/host -it smartace/smartace
+docker run -v $(pwd):/host -it seahorn/smartace:arak
 ```
 
 This gives you terminal access to the SmartACE container. In this container,

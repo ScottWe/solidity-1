@@ -23,7 +23,8 @@ to:
   4. Use fuzz testing to search for violations in the smart contract.
 
 **Note**: This tutorial assumes all commands are run from within the
-[SmartAce container](2_getting_started.md).
+[SmartAce container](1_installation.md). All tutorial files are available within
+the container from the home directory.
 
 ## Instrumenting a Solidity Smart Contract
 
