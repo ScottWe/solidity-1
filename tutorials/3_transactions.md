@@ -8,6 +8,9 @@ categories: [smartace, verification, model checking]
 
 # 3. Debugging Smart Contracts with SmartACE
 
+By Scott Wesley in collaboration Maria Christakis, Arie Gurfinkel, Xinwen Hu,
+Jorge Navas, and Valentin Wüstholz.
+
 Solidity supports pre- and post-conditions through the `require` and `assert`
 statements. As shown in the [previous tutorial](2_getting_started.md), these are
 sufficient for simple representation invariants. However, for more complex

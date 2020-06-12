@@ -8,6 +8,9 @@ categories: [smartace, verification, model checking, local reasoning]
 
 # 4. Verifying Client Properties in SmartACE
 
+By Scott Wesley in collaboration Maria Christakis, Arie Gurfinkel, Xinwen Hu,
+Jorge Navas, and Valentin Wüstholz.
+
 In our [previous tutorial](3_transactions.md), we used SmartACE to identify
 ownership exploits in a simple smart contract. We concluded the tutorial by
 fixing the bug, and proving its absence for executions with two clients.

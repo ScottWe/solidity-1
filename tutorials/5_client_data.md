@@ -8,6 +8,9 @@ categories: [smartace, verification, model checking, local reasoning]
 
 # 5. Reasoning About Client State in SmartACE
 
+By Scott Wesley in collaboration Maria Christakis, Arie Gurfinkel, Xinwen Hu,
+Jorge Navas, and Valentin Wüstholz.
+
 [Last time](4_arbitrary_clients.md) we used SmartACE to prove safety properties
 for any number of clients. The example was by no means trivial, but it was in
 many ways a toy. Namely, the `Manager` bundle we analyzed did not keep mappings
