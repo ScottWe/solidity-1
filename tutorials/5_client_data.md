@@ -252,22 +252,17 @@ are distinct from client addresses).
 ### Local Reasoning in SmartACE
 
 When we apply local reasoning in SmartACE, we partition the addresses into
-*representative* addresses and *interference* addresses. Representatives are
-used when the address must refer to a single client, such as a literal address
-or a contract address. Interference addresses are used when the address does not
-refer to a distinct client. This distinction is important, as at any point
-during analysis, we know the exact value of each representative vertex.
-
-[TODO: perhaps we should change the terminology to "distinguished" and
-"representative". Distinguished (currently representative[OLD]) addresses are
-used to designate a single client. Representative[NEW] (currently interference)
-addresses stand in for any member from a group of clients. In other words, it is
-the "representative of an equivalence class".]
+*distinguished* addresses and *representative* addresses. Distinguished
+addresses are used when the address must refer to a single client, such as a
+literal address or a contract address. Representative addresses are used when
+the address does not refer to a distinct client. This distinction is important,
+as at any point during analysis, we know the exact value of each distinguished
+vertex.
 
 Before applying local reasoning, SmartACE requires three parameters: the number
-of representative addresses, the number of interference addresses, and a
+of distinguished addresses, the number of representative addresses, and a
 candidate invariant. SmartACE automatically discovers the minimum number of
-representative and interference addresses, using the techniques outlined in the
+distinguished and representative addresses, using the techniques outlined in the
 [previous tutorial](4_arbitrary_clients.md). Conversely, the candidate invariant
 must be provided manually. SmartACE then ensures that the candidate is both
 compositional and adequate. In the future, SmartACE will also automate invariant
@@ -303,8 +298,8 @@ struct Map_1 {
 We observe that the mapping stores a single entry for each restricted address
 value. The intention is that during transactions, the `data_` variables form a
 snapshot of some neighbourhood within the network. As addresses `0` to `2` are
-representatives, these entries are shared between all possible neighbourhoods.
-For addresses `3` to `5`, however, the entries are interference and need not
+distinguished, these entries are shared between all possible neighbourhoods. For
+addresses `3` to `5`, however, the entries are representative and need not
 persist across neighbourhoods. This insight will be important once we instrument
 the model.
 
@@ -348,15 +343,15 @@ the adequacy check. There are two parts to the adequacy check:
 
   1. We must instrument the property, just as we have done in
      [previous tutorials](3_transactions.md).
-  2. Before each transaction, we must place new values in each interference
+  2. Before each transaction, we must place new values in each representative
      entry of `invested`.
 
 If we were to stop after step one, we would be left with a bounded model, just
 as we had constructed in [tutorial 3](3_transactions.md). To generalize this to
 an arbitrary number of clients, we must begin each transaction with new values
-at each interference vertex. Intuitively, we can think of this as allowing a new
-client from the same client group to make a move. Let's see how this looks in
-practice.
+at each representative vertex. Intuitively, we can think of this as allowing a
+new client from the same client group to make a move. Let's see how this looks
+in practice.
 
 In general, we must instrument the property against any arbitrary clients. We
 will see an example of this in the next tutorial. However, for our simple
@@ -409,8 +404,8 @@ void Fund_Method_transfer(/* Blockchain state */,
 Next we instrument the transaction loop. At the start of each transaction, we
 select a process to run the transaction. Since the processes in our network
 model are conceptual, this equates to initializing a new neighbourhood. We know
-that representative clients are shared between all neighbourhoods, so this
-reduces to selecting new values for all interference vertices. We make this
+that distinguished clients are shared between all neighbourhoods, so this
+reduces to selecting new values for all representative vertices. We make this
 selection in accordance with the compositional invariant.
 
 First, let's make the compositional invariant concrete. By definition, the
@@ -428,12 +423,12 @@ int invariant(struct Manager *c0, struct Fund *c1)
 }
 ```
 
-Now let's populate the interference vertices. We will do this before running the
-transaction. Navigate to line 240 and add the following:
+Now let's populate the representative vertices. We will do this before running
+the transaction. Navigate to line 240 and add the following:
 
 ```cpp
 /* [START] INSTRUMENTATION */
-// Updates the interference vertices.
+// Updates the representative vertices.
 Write_Map_1(&contract_1->user_investments,
             Init_sol_address_t(3),
             Init_sol_uint256_t(nd_uint256_t("investments[3]")));
