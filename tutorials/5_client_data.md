@@ -11,18 +11,18 @@ categories: [smartace, verification, model checking, local reasoning]
 By Scott Wesley in collaboration Maria Christakis, Arie Gurfinkel, Xinwen Hu,
 Jorge Navas, and Valentin Wüstholz.
 
-[Last time](4_arbitrary_clients.md) we used SmartACE to prove safety properties
+[Last time](4_arbitrary_clients.md), we used SmartACE to prove safety properties
 for any number of clients. The example was by no means trivial, but it was in
 many ways a toy. Namely, the `Manager` bundle we analyzed did not keep mappings
 from client addresses to client data. In such cases we must summarize both the
 client addresses and the client data.
 
-In this tutorial we will prove a simple invariant with client data. First, we
-will extend the `Manager` bundle to use maps, and describe our property of
-interest. We will then revisit network topology to better understand the impact
-of client data. Using this insight, we will then work on summarizing the client
-data. Finally, we will show how SmartACE applies this theory in practice, and
-then use it to verify our new property.
+In this tutorial, we prove a simple invariant with client data. First, we extend
+the `Manager` bundle to use maps, and describe our property of interest. We then
+revisit network topology to better understand the impact of client data. Using
+this insight, we then work on summarizing the client data. Finally, we show how
+SmartACE applies this theory in practice, and then use it to verify our new
+property.
 
 **Note**: This tutorial assumes all commands are run from within the
 [SmartAce container](1_installation.md). All tutorial files are available within
@@ -87,8 +87,8 @@ contract Manager {
 We can now pose local client properties about the bundle. These are properties
 which give invariants over fixed size subsets of clients. For example, we could
 specify that the investments of any two clients are conserved across calls to
-`transfer()`. This property will be our running example for the remainder of the
-tutorial. We specify the property in past linear temporal logic (pLTL) by
+`transfer()`. This property serves as our running example for the remainder of
+the tutorial. We specify the property in past linear temporal logic (pLTL) by
 writing:
 
 > It is *always* the case that whenever `msg.sender` calls `transfer()` and
@@ -300,8 +300,8 @@ value. The intention is that during transactions, the `data_` variables form a
 snapshot of some neighbourhood within the network. As addresses `0` to `2` are
 distinguished, these entries are shared between all possible neighbourhoods. For
 addresses `3` to `5`, however, the entries are representative and need not
-persist across neighbourhoods. This insight will be important once we instrument
-the model.
+persist across neighbourhoods. This insight is important once we instrument the
+model.
 
 Moving to lines 147 to 181, we find the operations defined on the mapping.
 
