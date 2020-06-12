@@ -37,13 +37,11 @@ In the past two tutorials we
 [identified an ownership exploit](3_transactions.md), patched the bug, and then
 [verified its absence for any number of clients](4_arbitrary_clients.md).
 
-We now extend the `Manager` bundle to make use of 
 Let's extend the `Manager` bundle to make use of mappings. To keep our example
 realistic, we mimic [ERC-20 tokens](https://eips.ethereum.org/EIPS/eip-20).
 First we add an `invested` mapping onto `Fund` to track the total deposits of
-each client. Next, we add a `Fund.transfer(address, uint256)` method to allow a
-client to transfer `_amount` Ether to `_destination`. The new contract is given
-below:
+each client. Next, we add a `transfer()` method to allow a client to transfer
+`_amount` Ether to `_destination`. The new contract is given below:
 
 ```solidity
 contract Fund {
@@ -89,23 +87,24 @@ contract Manager {
 We can now pose local client properties about the bundle. These are properties
 which give invariants over fixed size subsets of clients. For example, we could
 specify that the investments of any two clients are conserved across calls to
-`Fund.transfer(address, uint256)`. This property will be our running example for
-the remainder of the tutorial. We specify the property in past linear temporal
-logic (pLTL) by writing:
+`transfer()`. This property will be our running example for the remainder of the
+tutorial. We specify the property in past linear temporal logic (pLTL) by
+writing:
 
-> It is *always* the case that whenever `msg.sender` calls `Fund.transfer()` and
-> sends `_amount` to some other client `_dst`, then `Fund.invested[msg.sender]`
-> is decreased by  `_amount` while  `Fund.invested[_destination]` is increased
-> by `_amount`.
+> It is *always* the case that whenever `msg.sender` calls `transfer()` and
+> sends `_amount` to some other client `_destination`, then
+> `invested[msg.sender]` is > decreased by  `_amount` while 
+> `invested[_destination]` is increased by `_amount`.
 
 We then formalize the property using the
-[VerX Specification Language](https://verx.ch/docs/spec.html), As presented in
+[VerX Specification Language](https://verx.ch/docs/spec.html), as presented in
 [tutorial 3](3_transactions.md). Recall that `FUNCTION` is the name of the last
 method called, while `prev(v)` is the value of `v` before `FUNCTION` was called.
 `once` and `always` are pLTL operators, where `once(p)` is true if `p` has ever
-been true while `always(p)` is true if `p` has always been true. We write
-`Fund.transfer(address, uint256)[i]` to refer to the i-th argument passed to
-`Fund.transfer(address, uint256)`. This gives the formalization:
+been true while `always(p)` is true if `p` has always been true. In addition to
+these notations, the language also defines `Fund.transfer(address, uint256)[i]`
+to refer to the i-th argument passed to `Fund.transfer(address, uint256)`. This
+gives the formalization:
 
 ```
 always(
@@ -135,7 +134,7 @@ compact. First we introduce the following predicates:
   * `is_transfer := FUNCTION == Fund.transfer`
   * `distinct := msg.sender != _destination`
   * `sent := invested[msg.sender] + _amount = prev(invested[msg.sender])`
-  * `recv := prev(invested[_destination]) + _amount = prev(invested[_destination]`
+  * `recv := prev(invested[_destination]) + _amount = invested[_destination]`
 
 And then give the regular expression
 `(!(is_transfer && distinct) || (send && recv))*`.
@@ -220,7 +219,7 @@ a compositional invariant.
 This invariant can be any predicate over the state of the neighbourhood.
 Specifically, it can be aware of the client class it is summarizing. However, to
 be compositional, it must also satisfy three properties [[1](#reference),
-[2](#reference)].
+[2](#reference)]:
 
   1. (Initialization) When the neighbourhood is zero-initialized, the data
      vertices satisfy the invariant.
@@ -276,11 +275,12 @@ selection.
 
 As an example, we now walk through verifying a candidate invariant. We start
 with the weakest candidate, namely `True`. As `True` implies `True`, this
-candidate is compositional by definition. Instead, we can focus entirely on
-adequacy. We do this across two sections. The first section takes a detour and
-briefly outline how maps are modelled in SmartACE. The second section walks
-through adequacy checks in SmartACE. With these goals in mind, let's start by
-generating the model:
+candidate is compositional by definition. Therefore, we put our focus entirely
+on adequacy. We do this across two sections. The
+[first section](#mappings-in-smartace) takes a detour and briefly outline how
+maps are modelled in SmartACE. The [second section](#instrumenting-the-model)
+walks through adequacy checks in SmartACE. With these goals in mind, let's start
+by generating the model:
 
   * `solc fund.sol --bundle=Manager --c-model --output-dir=fund`
   * `cd fund ; mkdir build ; cd build`
@@ -338,8 +338,8 @@ void Write_Map_1(struct Map_1 *arr, sol_address_t key_0, sol_uint256_t dat) {
 ```
 
 By wrapping mapping accesses in function calls, SmartACE can easily instrument
-all mapping accesses. We will see in a future tutorial how write instrumentation
-allows us to reason locally about sums across mappings.
+all mapping accesses. We will see in a future tutorial how the instrumentation
+of the write method allows us to reason locally about sums across mappings.
 
 #### Instrumenting the Model
 
@@ -349,7 +349,7 @@ the adequacy check. There are two parts to the adequacy check:
   1. We must instrument the property, just as we have done in
      [previous tutorials](3_transactions.md).
   2. Before each transaction, we must place new values in each interference
-     entry of `Fund.invested`.
+     entry of `invested`.
 
 If we were to stop after step one, we would be left with a bounded model, just
 as we had constructed in [tutorial 3](3_transactions.md). To generalize this to
@@ -361,9 +361,8 @@ practice.
 In general, we must instrument the property against any arbitrary clients. We
 will see an example of this in the next tutorial. However, for our simple
 property, the clients are not arbitrary. They are bounded to the sender and
-recipient of each `Fund.transfer(address,uint256)` call. Given this insight, we
-first add global ghost variables to track the pre- and post-investments of both
-clients:
+recipient of each `transfer()` call. Given this insight, we first add global
+ghost variables to track the pre- and post-investments of both clients:
 
 ```cpp
 GHOST_VAR sol_uint256_t recipient_pre;
@@ -372,7 +371,7 @@ GHOST_VAR sol_uint256_t sender_pre;
 GHOST_VAR sol_uint256_t sender_post;
 ```
 
-We then instrument the check in `Fund.transfer(address,uint256)` at line 105:
+We then instrument the check in `transfer()` at line 105:
 
 ```cpp
 void Fund_Method_transfer(/* Blockchain state */,
@@ -433,7 +432,8 @@ Now let's populate the interference vertices. We will do this before running the
 transaction. Navigate to line 240 and add the following:
 
 ```cpp
-/* Updates the interference vertices. */
+/* [START] INSTRUMENTATION */
+// Updates the interference vertices.
 Write_Map_1(&contract_1->user_investments,
             Init_sol_address_t(3),
             Init_sol_uint256_t(nd_uint256_t("investments[3]")));
@@ -443,9 +443,12 @@ Write_Map_1(&contract_1->user_investments,
 Write_Map_1(&contract_1->user_investments,
             Init_sol_address_t(5),
             Init_sol_uint256_t(nd_uint256_t("investments[5]")));
+/* [ END ] INSTRUMENTATION */
 
-/* Assumes that the compositional invariant holds. */
+/* [START] INSTRUMENTATION */
+// Assumes that the compositional invariant holds.
 sol_require(invariant(&contract_0, contract_1), "Bad arrangement.");
+/* [ END ] INSTRUMENTATION */
 
 switch (next_call) { /* ... Cases and check ... */ }
 
@@ -467,8 +470,8 @@ We find that no counterexample exists. However, we are not given a proof
 certificate. At first this may seem like an error, but it is in fact correct. 
 If no certificate is given, then additional invariants are not necessary to
 prove the property. If we look at how we instrumented the property, this isn't
-surprising. Essentially, our property summarizes the operations of
-`Fund.transfer(address,uint256)`, and this follows trivially.
+surprising. Essentially, our property summarizes the operations of `transfer()`,
+and thus follows trivially.
 
 ## Conclusion
 
