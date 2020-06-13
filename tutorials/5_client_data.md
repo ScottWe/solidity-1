@@ -126,7 +126,7 @@ always(
 )
 ```
 
-As a final step, we can constructor a monitor for the property. The monitor
+As a final step, we can construct a monitor for the property. The monitor
 detects if the property is violated, and allows us to verify the claim. Our
 property is essentially a functional post-condition, so the monitor is very
 compact. First we introduce the following predicates:
@@ -136,7 +136,7 @@ compact. First we introduce the following predicates:
   * `sent := invested[msg.sender] + _amount = prev(invested[msg.sender])`
   * `recv := prev(invested[_destination]) + _amount = invested[_destination]`
 
-And then give the regular expression
+Expressed as a regular expression, the monitor is:
 `(!(is_transfer && distinct) || (send && recv))*`.
 
 ## Local Reasoning Over Client Mappings
@@ -260,14 +260,14 @@ the address does not refer to a distinct client. This distinction is important,
 as at any point during analysis, we know the exact value of each distinguished
 vertex.
 
-Before applying local reasoning, SmartACE requires three parameters: the number
-of distinguished addresses, the number of representative addresses, and a
-candidate invariant. SmartACE automatically discovers the minimum number of
-distinguished and representative addresses, using the techniques outlined in the
-[previous tutorial](4_arbitrary_clients.md). Conversely, the candidate invariant
-must be provided manually. SmartACE then ensures that the candidate is both
-compositional and adequate. In the future, SmartACE will also automate invariant
-selection.
+Under this perspective, local reasoning requires three parameters: the number of
+distinguished addresses, the number of representative addresses, and a predicate
+over neighbourhoods. SmartACE automatically discovers cutoffs for the number of
+distinguished addresses and representative addresses, using the techniques
+outlined in the [previous tutorial](4_arbitrary_clients.md). However, the
+predicate must be provided manually. At the present, SmartACE will attempt to
+strengthen the predicate into an adequate compositional invariant. In the
+future, SmartACE will also automate the selection of predicates.
 
 As an example, we now walk through verifying a candidate invariant. We start
 with the weakest candidate, namely `True`. As `True` implies `True`, this
