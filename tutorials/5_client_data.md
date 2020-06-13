@@ -141,15 +141,16 @@ Expressed as a regular expression, the monitor is:
 
 ## Local Reasoning Over Client Mappings
 
-Mappings allow us to associated variables with clients. This fundamentally
-changes the `Manager` bundle topology. We can think of this new topology as a
-graph with two types of vertices: *process vertices* and *data vertices*
-[[2](#reference)]. Each process vertex is assigned to one or more transactions
-in the `Manager` bundle, whereas each data vertex is assigned to a single
-mapping entry. If a process can write to a mapping entry, there is a directed
-edge from the process vertex to the data vertex. If a process can read from a
-mapping vertex, there is a directed edge from the data vertex to the process
-vertex.
+Mappings allow us to associate variables with clients. We can conceptualize
+these associations as a
+[bipartite graph](https://mathworld.wolfram.com/BipartiteGraph.html) with two
+types of vertices: *process vertices* and *data vertices* [[2](#reference)].
+Each process vertex is associated with one or more transactions of the `Manager`
+bundle, whereas each data vertex is assigned to a single mapping entry. If a
+process can write to a mapping entry, there is a directed edge from the process
+vertex to a data vertex. Likewise, if a process can read from a mapping vertex,
+there is a directed edge from te data vertex to the process vertex. We call this
+graph the network topology of the `Manager` bundle.
 
 This leads us to the general case of local reasoning. We have a network which is
 parameterized by the number of processes. Each process has access to some finite
@@ -448,7 +449,7 @@ sol_require(invariant(&contract_0, contract_1), "Bad arrangement.");
 
 switch (next_call) { /* ... Cases and check ... */ }
 
-/* The invariant is `True`, so it trivially hold afterwards. */
+// The invariant is `True`, so it trivially hold afterwards.
 ```
 
 This new model replaces entries 3, 4 and 5 with the compositional invariant. If
