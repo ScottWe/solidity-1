@@ -92,7 +92,7 @@ the tutorial. We specify the property in past linear temporal logic (pLTL) by
 writing:
 
 > It is *always* the case that whenever `msg.sender` calls `transfer()` and
-> sends `_amount` to some other client `_destination`, then
+> sends `_amount` to some other client, `_destination`, then
 > `invested[msg.sender]` is > decreased by  `_amount` while 
 > `invested[_destination]` is increased by `_amount`.
 
@@ -144,19 +144,19 @@ Expressed as a regular expression, the monitor is:
 Mappings allow us to associate variables with clients. We can conceptualize
 these associations as a
 [bipartite graph](https://mathworld.wolfram.com/BipartiteGraph.html) with two
-types of vertices: *process vertices* and *data vertices* [[2](#reference)].
+types of vertices: *process vertices* and *data vertices* [[3](#reference)].
 Each process vertex is associated with one or more transactions of the `Manager`
 bundle, whereas each data vertex is assigned to a single mapping entry. If a
 process can write to a mapping entry, there is a directed edge from the process
 vertex to a data vertex. Likewise, if a process can read from a mapping vertex,
 there is a directed edge from te data vertex to the process vertex. We call this
-graph the *network topology* of the `Manager` bundle [[2](#reference)].
+graph the *network topology* of the `Manager` bundle [[3](#reference)].
 
 This leads us to the general case of local reasoning. We have a network which is
 parameterized by the number of processes. Each process has access to some finite
 set of shared variables. We want to show that all processes accessing the same
 variable obey some invariant. We then combine these invariants to find an
-invariant of the entire network [[2](#reference)]. We can think of the
+invariant of the entire network [[3](#reference)]. We can think of the
 [previous tutorial](4_arbitrary_clients.md) as the degenerate case where each
 client has zero mapping entries.
 
@@ -222,8 +222,8 @@ a compositional invariant.
 
 This invariant can be any predicate over the state of the neighbourhood.
 Specifically, it can be aware of the client class it is summarizing. However, to
-be compositional, it must also satisfy three properties [[1](#reference),
-[2](#reference)]:
+be compositional, it must also satisfy three properties [[2](#reference),
+[3](#reference)]:
 
   1. (Initialization) When the neighbourhood is zero-initialized, the data
      vertices satisfy the invariant.
@@ -242,7 +242,7 @@ While compositionality ensures that our model preserves counterexamples, it does
 not necessarily ensure that we preserve the correctness of the bundle. If our
 summary is too weak, it might permit counterexamples which do not exist in the
 original bundle. We say that a compositional invariant is *adequate* if it
-blocks all such counterexamples [[2](#reference)].
+blocks all such counterexamples [[3](#reference)].
 
 We can use the insight of compositional invariants to better justify our
 restricted address values in the [previous tutorial](4_arbitrary_clients.md). As
@@ -473,6 +473,26 @@ prove the property. If we look at how we instrumented the property, this isn't
 surprising. Essentially, our property summarizes the operations of `transfer()`,
 and thus follows trivially.
 
+### A Remark on Correctness and Modal Logic
+
+At the start of this tutorial we required that our property should hold whenever
+the recipient of `transfer()` is distinct from the sender. By doing this, we
+sidestepped some nuances of the specification. Namely, we avoided defining what
+it means for `transfer()` to conserve Ether. In the case of a distinct sender
+and recipient, the sender's investment should decrease by `_amount` while the
+recipient's investment should increase by `_amount`. However, when the sender
+and recipient are the same, this requires that the sender's investment both
+increase and decrease by `_amount`. This is impossible unless `_amount == 0`.
+
+Instead, we would like to require that whenever the sender is the recipient, the
+sender's investment is unchanged. While we could have specified this, it would
+have been very verbose. In practice, we would like to assign sets of properties
+to states of the smart contract. We would also like to identify when certain
+states are missed by the specifications, such as `msg.sender == _destination` in
+our example. One promising solution to this problem is modal logic, which can
+extend pLTL to succinctly and explicitly describe the *modes* (states) of a
+system [[1](#references)].
+
 ## Conclusion
 
 In this tutorial, we learned how SmartACE models bundles with client-owned data.
@@ -482,11 +502,16 @@ trivial compositional invariant. In the next tutorial, we will look at verifying
 more difficult properties against non-trivial compositional invariants.
 
 ## References
+drien Champion, Arie Gurfinkel, Temesghen Kahsai, Cesare Tinelli:
+CoCoSpec: A Mode-Aware Contract Language for Reactive Systems. SEFM 2016: 347-366
+  1. Champion, A., Gurfinkel, A., Kahsai, T., Tinelli, C.: A mode-aware contract
+     language for reactive systems. SEFM. **14**. 347-366 (2016). DOI:
+     https://doi.org/10.1007/978-3-319-41591-8
 
-  1. Gurfinkel, A., Meshman, Y., Shoham, S.: SMT-based verification of
+  2. Gurfinkel, A., Meshman, Y., Shoham, S.: SMT-based verification of
      parameterized systems. FSE. **24**, 338-348 (2016). DOI:
      https://doi.org/10.1145/2950290.2950330
 
-  2. Namjoshi, K.S., and Trefler, R.J.: Parameterized compositional model
+  3. Namjoshi, K.S., and Trefler, R.J.: Parameterized compositional model
      checking. TACAS. **22**, 589-606 (2016). DOI:
      https://doi.org/10.1007/978-3-662-49674-9_39
