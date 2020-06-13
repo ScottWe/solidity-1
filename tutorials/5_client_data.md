@@ -150,7 +150,7 @@ bundle, whereas each data vertex is assigned to a single mapping entry. If a
 process can write to a mapping entry, there is a directed edge from the process
 vertex to a data vertex. Likewise, if a process can read from a mapping vertex,
 there is a directed edge from te data vertex to the process vertex. We call this
-graph the network topology of the `Manager` bundle.
+graph the *network topology* of the `Manager` bundle [[2](#reference)].
 
 This leads us to the general case of local reasoning. We have a network which is
 parameterized by the number of processes. Each process has access to some finite
@@ -185,7 +185,7 @@ modifier restrictClients(address _client) {
     require(
         _client == address(0) || _client == address(Manager) ||
         _client == address(Fund) || _client == addr1 ||
-        _client == addr3 || _client == addr3
+        _client == addr2 || _client == addr3
     );
 }
 ```
@@ -197,8 +197,11 @@ transaction to some process vertex in the network topology.
 
 To illustrate this construction, and to highlight its symmetry, we give the
 graphs for 6 and 7 clients. To improve readability, we do not show the data
-vertices shared by all processes. We name the arbitrary address `A1`, `A2`,
+vertices shared by all processes. We name the arbitrary addresses `A1`, `A2`,
 `A3`, and `A4` to stress the point that each address is strictly an identifier.
+We write `(Manager, i, j, k)` to denote the transactions of the `Manager` bundle
+associated with addresses `i`, `j` and `k`.
+
 The topology for 6 clients is:
 
 ![](5_one_process.svg)
