@@ -155,10 +155,10 @@ graph the *network topology* of the `Manager` bundle [[3](#reference)].
 This leads us to the general case of local reasoning. We have a network which is
 parameterized by the number of processes. Each process has access to some finite
 set of shared variables. We want to show that all processes accessing the same
-variable obey some invariant. We then combine these invariants to find an
-invariant of the entire network [[3](#reference)]. We can think of the
-[previous tutorial](4_arbitrary_clients.md) as the degenerate case where each
-client has zero mapping entries.
+variable obey some locally inductive invariant. We then combine these invariants
+to obtain an invariant for the entire network [[3](#reference)]. We can think of
+the [previous tutorial](4_arbitrary_clients.md) as the degenerate case where
+each client has zero mapping entries.
 
 ### Topology in the `Manager` Bundle
 
@@ -216,9 +216,9 @@ Local reasoning allows us to find a sufficiently large neighbourhood, against
 which we can then prove properties for all possible networks. We do this in two
 steps. First, we no longer think of each data vertex as belonging to a single
 client. Instead, we now let it represent a group of similar clients (formally,
-this is an *equivalence class*). We then replace each data vertex with an
-invariant which summarizes all possible values at the vertex. We call this
-a compositional invariant.
+this is an *equivalence class*). We then replace each data vertex with a locally
+inductive invariant which summarizes all possible values at the vertex. We call
+this a compositional invariant.
 
 This invariant can be any predicate over the state of the neighbourhood.
 Specifically, it can be aware of the client class it is summarizing. However, to
@@ -227,8 +227,8 @@ be compositional, it must also satisfy three properties [[2](#reference),
 
   1. (Initialization) When the neighbourhood is zero-initialized, the data
      vertices satisfy the invariant.
-  2. (Transaction) If the invariant holds for some clients before they perform a
-     transaction, the invariant still holds afterwards.
+  2. (Local Inductiveness) If the invariant holds for some clients before they
+     perform a transaction, the invariant still holds afterwards.
   3. (Non-interference) If the invariant holds for some client, the actions of
      any other clients cannot break it.
 
@@ -273,14 +273,16 @@ predicate must be provided manually. At the present, SmartACE will attempt to
 strengthen the predicate into an adequate compositional invariant. In the
 future, SmartACE will also automate the selection of predicates.
 
-As an example, we now walk through verifying a candidate invariant. We start
-with the weakest candidate, namely `True`. As `True` implies `True`, this
-candidate is compositional by definition. Therefore, we put our focus entirely
-on adequacy. We do this across two sections. The
-[first section](#mappings-in-smartace) takes a detour and briefly outline how
-maps are modelled in SmartACE. The [second section](#instrumenting-the-model)
-walks through adequacy checks in SmartACE. With these goals in mind, let's start
-by generating the model:
+As an example, let's see how SmartACE strengthens a candidate predicate. For
+simplicity, we select the weakest candidate, namely `True`. It is not hard to
+see that `True` is compositional by definition, However, it may not be adequate
+for our property of interest. To check whether the predicate is adequate, we
+instrument the mappings in our model. We walk through this procedure in the next
+two sections. In the [first section](#mappings-in-smartace), we take a detour
+and outline how maps are modelled in SmartACE. In the
+[second section](#instrumenting-the-adequacy-check), we use this knowledge to
+instrument the adequacy checks. With these goals in mind, let's start by
+generating the model:
 
   * `solc fund.sol --bundle=Manager --c-model --output-dir=fund`
   * `cd fund ; mkdir build ; cd build`
@@ -341,7 +343,7 @@ By wrapping mapping accesses in function calls, SmartACE can easily instrument
 all mapping accesses. We will see in a future tutorial how the instrumentation
 of the write method allows us to reason locally about sums across mappings.
 
-#### Instrumenting the Model
+#### Instrumenting the Adequacy Check
 
 Now that we understand how SmartACE models a mapping, we are ready to instrument
 the adequacy check. There are two parts to the adequacy check:
@@ -411,11 +413,11 @@ select a process to run the transaction. Since the processes in our network
 model are conceptual, this equates to initializing a new neighbourhood. We know
 that distinguished clients are shared between all neighbourhoods, so this
 reduces to selecting new values for all representative vertices. We make this
-selection in accordance with the compositional invariant.
+selection in accordance with the candidate predicate.
 
-First, let's make the compositional invariant concrete. By definition, the
-compositional invariant is a predicate over process configurations. Therefore,
-we add the following definition to `cmodel.c`:
+First, let's make the encode the predicate in the model. By definition, the
+predicate over process configurations. Therefore, we add the following
+definition to `cmodel.c`:
 
 ```cpp
 // The `True` compositional invariant.
@@ -446,17 +448,20 @@ Write_Map_1(&contract_1->user_investments,
 /* [ END ] INSTRUMENTATION */
 
 /* [START] INSTRUMENTATION */
-// Assumes that the compositional invariant holds.
+// Assumes that the predicate holds.
 sol_require(invariant(&contract_0, contract_1), "Bad arrangement.");
 /* [ END ] INSTRUMENTATION */
 
 switch (next_call) { /* ... Cases and check ... */ }
 
-// The invariant is `True`, so it trivially hold afterwards.
+// The predicate is `True`, so it trivially hold afterwards.
 ```
 
-This new model replaces entries 3, 4 and 5 with the compositional invariant. If
-this new program is safe, the invariant must be adequate.
+This new model replaces entries 3, 4 and 5 with the candidate predicate. If this
+new program is safe, then the predicate must be adequate. Combined with our prior
+knowledge that `True` is compositional, this program is safe only if `True` is
+an adequate compositional invariant. In the next tutorial, we will look at cases
+where the predicate it not trivially compositional.
 
 ## Proving the Property
 
