@@ -201,9 +201,9 @@ and an increasing `block.number` and `block.timestamp`. The addresses `0`, `1`
 and `2` are reserved for `address(0)`, `address(Manager)`, and
 `address(Manager.fund)`, respectively. Hence, they are not valid senders.
 However, an attentive reader may notice that we restrict `msg.sender` to `3` and
-`4`. The importance of this choice, and its impact on soundness, are the topic
+`4`. The importance of this choice, and its impact on correctness, are the topic
 of the next tutorial. For now we can think of this as a bounded model with two
-clients, so at the least, our verification is complete.
+clients, so at the least, our verification gives valid counterexamples.
 
 At line 108 we then find the "transaction loop" which simulates a sequence of
 transitions:

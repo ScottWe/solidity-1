@@ -191,9 +191,10 @@ interested in the running example can safely skip to the
 ## Reasoning About Clients Through Program Syntax
 
 So far we have seen how to construct a neighbourhood for the `Manager` bundle.
-We argued that the model was sound by appealing to the network's topology,
-that is, the way in which clients are organized. We inferred this organization
-by inspecting the source text. This motivates a syntax-directed client analysis.
+We argued that the model preserved the correctness of the bundle by appealing to
+the network's topology, that is, the way in which clients are organized. We
+inferred this organization by inspecting the source text. This motivates a
+syntax-directed client analysis.
 
 In particular, we can summarize our analysis of the `Manager` bundle with four
 syntactic patterns. SmartACE does this analysis automatically. The patterns are

@@ -234,10 +234,11 @@ vertices are never "forgotten". Using this intuition, it is not hard to see why
 local reasoning with a compositional invariant is guaranteed to cover all paths
 of execution.
 
-While compositionality ensures that we are complete, it does not necessarily
-ensure soundness. If our summary is too weak, it might permit counterexamples
-which do not exist in the original bundle. We say that a compositional invariant
-is *adequate* if it blocks all such counterexamples [[2](#reference)].
+While compositionality ensures that our model preserves counterexamples, it does
+not necessarily ensure that we preserve the correctness of the bundle. If our
+summary is too weak, it might permit counterexamples which do not exist in the
+original bundle. We say that a compositional invariant is *adequate* if it
+blocks all such counterexamples [[2](#reference)].
 
 We can use the insight of compositional invariants to better justify our
 restricted address values in the [previous tutorial](4_arbitrary_clients.md). As
