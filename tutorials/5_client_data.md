@@ -200,7 +200,7 @@ graphs for 6 and 7 clients. To improve readability, we do not show the data
 vertices shared by all processes. We name the arbitrary addresses `A1`, `A2`,
 `A3`, and `A4` to stress the point that each address is strictly an identifier.
 We write `(Manager, i, j, k)` to denote the transactions of the `Manager` bundle
-associated with addresses `i`, `j` and `k`.
+associated with addresses `i`, `j` and `k`. All edges are bi-directional.
 
 The topology for 6 clients is:
 
@@ -507,8 +507,7 @@ trivial compositional invariant. In the next tutorial, we will look at verifying
 more difficult properties against non-trivial compositional invariants.
 
 ## References
-drien Champion, Arie Gurfinkel, Temesghen Kahsai, Cesare Tinelli:
-CoCoSpec: A Mode-Aware Contract Language for Reactive Systems. SEFM 2016: 347-366
+
   1. Champion, A., Gurfinkel, A., Kahsai, T., Tinelli, C.: A mode-aware contract
      language for reactive systems. SEFM. **14**. 347-366 (2016). DOI:
      https://doi.org/10.1007/978-3-319-41591-8
