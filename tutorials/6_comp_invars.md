@@ -12,16 +12,16 @@ By Scott Wesley in collaboration Maria Christakis, Arie Gurfinkel, Xinwen Hu,
 Jorge Navas, Richard Trefler, and Valentin Wüstholz.
 
 In the [last tutorial](5_client_data.md), we applied local reasoning to verify a
-contract with client state. The key insight of our proof was to summarize the
-set of acceptable client interactions, and then prove that this summary was
-never broken by interfering clients. However, our example was deceptively
-simple. Namely, our summary included all interactions, so it was trivially
-robust to interference.
+contract with client state. The key insight of our proof was summarizing the set
+of acceptable client interactions, and then proving that this summary was never
+broken by interfering clients. However, our example was deceptively simple.
+Namely, our summary included all interactions, so it was trivially robust to
+interference.
 
 In this tutorial, we consider a property which can be violated by certain client
-interactions. First, we define a set of interactions which excludes the bad
-examples. We then extend the SmartACE model to automatically verify the
-robustness of this set under interference.
+interactions. To overcome this, we first define a summary of interactions which
+excludes the bad examples. We then extend the SmartACE model to automatically
+verify the robustness of this summary under interference.
 
 To get started, let's define the smart contract, and the property of interest.
 
@@ -33,11 +33,13 @@ the container from the home directory.
 
 We consider another variation on the `Manager` bundle. In short, this bundle
 implements a `Manager` contract which controls access to an `Auction` contract.
-The `Auction` contract allows clients to `deposit()` and `withdraw()` Ether,
-which is then aggregated in a `bids` mapping.
+For those following on from past tutorials, the `Auction` contract is a
+variation on our reoccurring `Fund` example. The `Auction` contract allows
+clients to `deposit()` and `withdraw()` Ether, which is then aggregated in a
+`bids` mapping.
 
 The contract is designed such that maximum bid is strictly increasing. To
-achieve this, the `maxBid` variable is used to retain the maximum ibid. Net
+achieve this, the `maxBid` variable is used to recall the maximum bid. Net
 deposits must alway exceed `maxBid` while withdraws must always be less than
 `maxBid`.
 
@@ -93,21 +95,22 @@ The contract is available
 
 The correctness of this contract rests on two key observations:
 
-  1. No client's bid ever exceeds the maximum recorded bid.
-  2. After bidding has started, a unique client has the maximum recorded bid.
+  1. No client's bid can ever exceed the maximum recorded bid.
+  2. After bidding has started, some unique client always holds the maximum
+     recorded bid.
 
 In this tutorial we focus on property one. Let's start by making this statement
 more precise.
 
-> It is always the case that each investment in `Auction.bids` is at most the
+> It is always the case that each deposit into `Auction.bids` is at most the
 > value of `Auction.maxBid`.
 
 Now we can translate the property into the
 [VerX Specification Language](https://verx.ch/docs/spec.html). We note that this
-property is universally quantified across the set of addresses. This requires
-notion not seen in the previous tutorials. In particular, the VerX specification
-language allows us to write `property p(X) { <Formula Over X> }`, to denote a
-property quantified over all possible X. Therefore, our property becomes:
+property is universally quantified across all addresses. This requires notion
+not seen in the previous tutorials. In particular, the VerX specification
+language allows us to write `property p(X) { <Formula Over X> }`, to describe a
+property quantified over all possible `X`. Therefore, our property becomes:
 
 ```
 property p(X) {
@@ -132,9 +135,9 @@ Formally, an invariant is compositional if it satisfies:
   3. (Non-interference) If the invariant holds for some client, the actions of
      any other clients cannot break it.
 
-Each of these predicates is with respect to a bounded set of clients. We call
-this set a local neighbourhood. If our neighbourhood is large enough, the proof
-generalizes to any number of clients. The details of this can be found in the
+Recall that a neighbourhood is a fixed set of interacting clients. If our
+neighbourhoods are large enough, our proofs of correctness will generalize to
+any number of clients. The details of this can be found in the
 [last tutorial](5_client_data.md).
 
 ## Instrumenting the Smart Contract
@@ -142,21 +145,20 @@ generalizes to any number of clients. The details of this can be found in the
 The previous tutorials have gone into great detail on the instrumentation of
 [local safety properties](4_arbitrary_clients.md) and
 [adequacy checks](5_client_data.md). Therefore, we focus our attention on the
-compositional invariant. We have two challenges. First, we find an adequate
+compositional invariant. We have two challenges. First, we must find an adequate
 candidate predicate. Second, we must prove that this predicate is compositional.
 As of now, the selection of candidate predicates is manual. However, we present
-the selection as a mechanical process, which we intend to automate in future
-work.
+the selection as a mechanical process.
 
-To this end, let's start by generating the model:
+Let's start by generating the model:
 
   * `solc auction.sol --bundle=Manager --c-model --output-dir=auction`
   * `cd auction ; mkdir build ; cd build`
   * `CC=clang-10 CXX=clang++-10 cmake ..`
   * `cmake --build . --target run-clang-format`
 
-For simplicity, let's also translate the property into a simple `C` method. The
-method takes in a manager bundle, and checks the property for a given address:
+For simplicity, let's also encode the property as a simple `C` method. The
+method takes in a `Manager` bundle, and checks the property for a given address:
 
 ```cpp
 int property(struct Manager *c0, sol_address_t addr)
@@ -167,8 +169,8 @@ int property(struct Manager *c0, sol_address_t addr)
 }
 ```
 
-Let's also add a placeholder predicate for the compositional invariant. As
-`True` is always compositional, let's use that:
+Let's also add a placeholder method for the compositional invariant. As `True`
+is always compositional, we will use that:
 
 ```cpp
 int invariant(struct Manager *c0)
@@ -178,17 +180,17 @@ int invariant(struct Manager *c0)
 ```
 
 Throughout the rest of this example, we produce several variations of the model.
-All variations each available online. The above instrumentation can be found at
+All variations are available online. The above instrumentation can be found at
 line 213 of the
 [first variation](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-6/instrumented/cmodel_0.c).
 
 ### Attempt One: The `True` Invariant
 
-We want to show that `for all clients x: property(Manager, x)` is an inductive
-invariant of the smart contract. If we were to tackle this directly, we would
-prove that the property holds after constructing the bundle, and then continues
-to hold after each transaction. However, in the local setting, we need only
-prove that the compositional invariant implies the property. This is because the
+We want to show that `forall clients x: property(Manager, x)` is an inductive
+invariant of the contract. If we were to tackle this directly, we would prove
+that the property held after constructing the bundle, and then continued to
+hold after each transaction. However, in the local setting, we need only prove
+that the compositional invariant implies the property. This is because the
 compositional invariant summarizes all possible clients.
 
 This gives us the following
@@ -254,12 +256,12 @@ assignment is not feasible.
 ### Attempt Two: A Refined Invariant
 
 From the above analysis, we can see that the counterexample was spurious. Let's
-try to refine our compositional invariant given their trace. Perhaps there is a
-linear relation between `bids[3]` and one of the program variables. The obvious
-candidate is `bids[3] <= maxBid`. As `address(3)` corresponds to an arbitrary
-client, it is likely our invariant generalizes to all clients. This gives us the
-new predicate. The loop is bounded, and unrolls to checking `bids[i] <= maxBid`
-for each client in the neighbourhood.
+try to refine our compositional invariant given this trace. Perhaps we can do
+this with a linear relationship between `bids[3]` and one of the program
+variables. The obvious candidate is `bids[3] <= maxBid`. As `address(3)`
+corresponds to an arbitrary client, it is likely that our invariant generalizes
+to all clients. This gives us the new predicate shown below. The loop equates to
+checking `bids[i] <= maxBid` for each client in the neighbourhood.
 
 ```cpp
 int invariant(struct Manager *c0)
