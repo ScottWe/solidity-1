@@ -277,23 +277,23 @@ int invariant(struct Manager *c0)
 }
 ```
 
-We can find this new variation
+We can find the new model variation
 [here](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-6/instrumented/cmodel_2.c).
 If we rerun `cmake --build . --target verify` we see that this candidate is
 indeed adequate.
 
 However, we still have yet to prove the compositionality of our new invariant.
 We can automate this check by instrumenting one final model. We do this by
-instrumenting `Initialization`, `Local Inductiveness` and `Non-interference` as
+encoding `Initialization`, `Local Inductiveness` and `Non-interference` as
 program assertions. While most of the code is fairly straight forward, we do
 make use of two modeling tricks.
 
-  1. When checking `Initialization` and `Non-interference` we use
+  1. When checking `Initialization` and `Non-interference` we use three
      non-deterministic flag variables to model overlap between the two
      neighbourhoods.
   2. To simulate an external process, we compute two neighbourhoods for the same
-     program state, and cache the first result. This simulates an untouched
-     mapping entry.
+     program state, and cache the first result. This simulates untouched mapping
+     entries.
 
 To follow along, this last variation is available
 [here](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-6/instrumented/cmodel_3.c)
