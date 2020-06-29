@@ -122,11 +122,11 @@ property p(X) {
 
 ## Compositional Reasoning Revisited
 
-In the [last tutorial](5_client_data.md), we defined the compositional invariant
-and the adequate compositional invariant. Intuitively, the compositional
-invariant is a summary of the client interactions, while an adequate
-compositional invariant is a summary which implies our property of interest.
-Formally, an invariant is compositional if it satisfies:
+In the [last tutorial](5_client_data.md), we defined compositional invariants
+and adequate compositional invariants. Intuitively, a compositional invariant is
+a summary of the client interactions, while an adequate compositional invariant
+is such a summary which implies our property of interest. Formally, an invariant
+is compositional if it satisfies:
 
   1. (Initialization) When the neighbourhood is zero-initialized, the data
      vertices satisfy the invariant.
@@ -145,10 +145,11 @@ any number of clients. The details of this can be found in the
 The previous tutorials have gone into great detail on the instrumentation of
 [local safety properties](4_arbitrary_clients.md) and
 [adequacy checks](5_client_data.md). Therefore, we focus our attention on the
-compositional invariant. We have two challenges. First, we must find an adequate
-candidate predicate. Second, we must prove that this predicate is compositional.
-As of now, the selection of candidate predicates is manual. However, we present
-the selection as a mechanical process.
+compositional invariant. We have two challenges. First, we must find a candidate
+compositional invariant which is adequate. Second, we must prove that this
+candidate formula is truly compositional. As of now, the selection of candidate
+compositional invariant is manual. However, we present the selection as a
+mechanical process.
 
 Let's start by generating the model:
 
@@ -184,7 +185,7 @@ All variations are available online. The above instrumentation can be found at
 line 213 of the
 [first variation](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-6/instrumented/cmodel_0.c).
 
-### Attempt One: The `True` Invariant
+### Attempt One: The `True` Compositional Invariant
 
 We want to show that `forall clients x: property(Manager, x)` is an inductive
 invariant of the contract. If we were to tackle this directly, we would prove
@@ -253,14 +254,14 @@ the root cause of this problem, namely `bids[3] [uint256]: 1`. This says that
 `bids[3]` was assigned to a value larger than the maximum bid. Clearly, this
 assignment is not feasible.
 
-### Attempt Two: A Refined Invariant
+### Attempt Two: A Refined Compositional Invariant
 
 From the above analysis, we can see that the counterexample was spurious. Let's
 try to refine our compositional invariant given this trace. Perhaps we can do
 this with a linear relationship between `bids[3]` and one of the program
 variables. The obvious candidate is `bids[3] <= maxBid`. As `address(3)`
 corresponds to an arbitrary client, it is likely that our invariant generalizes
-to all clients. This gives us the new predicate shown below. The loop equates to
+to all clients. This gives us the new candidate shown below. The loop equates to
 checking `bids[i] <= maxBid` for each client in the neighbourhood.
 
 ```cpp
@@ -282,7 +283,7 @@ We can find the new model variation
 If we rerun `cmake --build . --target verify` we see that this candidate is
 indeed adequate.
 
-However, we still have yet to prove the compositionality of our new invariant.
+However, we still have yet to prove the compositionality of our new candidate.
 We can automate this check by instrumenting one final model. We do this by
 encoding `Initialization`, `Local Inductiveness` and `Non-interference` as
 program assertions. While most of the code is fairly straight forward, we do
@@ -372,18 +373,18 @@ while (sol_continue()) {
 #### The Compositionality Test
 
 If we rerun `cmake --build . --target verify`, all assertions will hold. This
-proves that our predicate obeys `Initialization`, `Local Inductiveness`, and
-`Non-interference`. Seahorn did not produce an invariant, so the predicate was
+proves that our candidate obeys `Initialization`, `Local Inductiveness`, and
+`Non-interference`. Seahorn did not produce an invariant, so the candidate was
 strong enough on its own. In other words, we have found the adequate
 compositional invariant for our property.
 
 #### Some Additional Remarks on Refinement
 
-Let's assume that the second predicate also failed. By failing the
-composoitionality test and passing the adequacy test, we would know that the
-predicate was too strong. We would need to expand the summary to account for the
-missing interactions. This is similar to when we restricted the summary after
-failing an adequacy test.
+Let's assume that the second candidate compositional invariant also failed. By
+failing the compositionality test and passing the adequacy test, we would know
+that the candidate was too strong. We would need to expand the summary to
+account for the missing interactions. This is similar to when we restricted the
+summary after failing an adequacy test.
 
 In principle, we could repeat this procedure until finding (or failing to find)
 an adequate compositional invariant. As each summary associates a finite space
@@ -395,9 +396,9 @@ work.
 
 ## Conclusion
 
-In this tutorial we saw how to test the compositionality of a given predicate.
-We used this insight to prove the correctness of a global client property. We
-also motivated a procedure to find compositional invariants. This concludes our
-three part series on the foundations of local reasoning. in the next tutorial,
-we will explore more challenging applications of local reasoning in smart
-contracts.
+In this tutorial we saw how to test the compositionality of a given candidate
+compositional invariant. We used this insight to prove the correctness of a
+global client property. We also motivated a procedure to find compositional
+invariants. This concludes our three part series on the foundations of local
+reasoning. in the next tutorial, we will explore more challenging applications
+of local reasoning in smart contracts.
