@@ -1,12 +1,12 @@
 ---
 layout: post
-title: "3. Debugging Smart Contracts with SmartACE"
+title: "Debugging Smart Contracts with SmartACE"
 subtitle: "Fixing Smart Contracts with SmartACE"
 date: 2020-05-19 21:00:00
 categories: [smartace, verification, model checking]
 ---
 
-# 3. Debugging Smart Contracts with SmartACE
+# Debugging Smart Contracts with SmartACE
 
 By Scott Wesley in collaboration Maria Christakis, Arie Gurfinkel, Xinwen Hu,
 Jorge Navas, Richard Trefler, and Valentin Wüstholz.

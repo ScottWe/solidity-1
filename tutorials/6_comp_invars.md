@@ -1,12 +1,12 @@
 ---
 layout: post
-title: "6. Handling Client Interference in SmartACE"
+title: "Handling Client Interference in SmartACE"
 subtitle: "Local Reasoning Part Three"
 date: 2020-05-25 12:00:00
 categories: [smartace, verification, model checking, local reasoning]
 ---
 
-# 6. Reasoning About Client State in SmartACE
+# Reasoning About Client State in SmartACE
 
 By Scott Wesley in collaboration Maria Christakis, Arie Gurfinkel, Xinwen Hu,
 Jorge Navas, Richard Trefler, and Valentin Wüstholz.
