@@ -158,8 +158,10 @@ Let's start by generating the model:
   * `CC=clang-10 CXX=clang++-10 cmake ..`
   * `cmake --build . --target run-clang-format`
 
-For simplicity, let's also encode the property as a simple `C` method. The
-method takes in a `Manager` bundle, and checks the property for a given address:
+To improve readability, we have replaced `contract_0` with `manager_contract`
+and `contract_1` with `auction_contract`. For simplicity, we will also encode
+the property as a simple `C` method. The method takes in a `Manager` bundle, and
+checks the property for a given address:
 
 ```cpp
 int property(struct Manager *c0, sol_address_t addr)
@@ -204,17 +206,17 @@ while (sol_continue()) {
   // [START] INSTRUMENTATION (LINE 250)
   /* Reached upon initialization, and after each iteration. */
   /* First we construct an arbitrary network. */
-  Write_Map_1(&contract_1->user_bids, Init_sol_address_t(3),
+  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(3),
               Init_sol_uint256_t(nd_uint256_t("bids[3]")));
-  Write_Map_1(&contract_1->user_bids, Init_sol_address_t(4),
+  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(4),
               Init_sol_uint256_t(nd_uint256_t("bids[4]")));
-  Write_Map_1(&contract_1->user_bids, Init_sol_address_t(5),
+  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(5),
               Init_sol_uint256_t(nd_uint256_t("bids[5]")));
-  sol_require(invariant(&contract_0), "Bad arrangement.");
+  sol_require(invariant(&manager_contract), "Bad arrangement.");
   /* Next, we check the property against this arbitrary neighbourhood. */
-  sol_assert(property(&contract_0, Init_sol_address_t(0)), "Address 0 violates Prop.");
+  sol_assert(property(&manager_contract, Init_sol_address_t(0)), "Address 0 violates Prop.");
   /* ... */
-  sol_assert(property(&contract_0, Init_sol_address_t(5)), "Address 5 violates Prop.");
+  sol_assert(property(&manager_contract, Init_sol_address_t(5)), "Address 5 violates Prop.");
   // [ END ] INSTRUMENTATION
 
   /* ... Call setup ... */
@@ -236,7 +238,7 @@ and generate a witness:
 We obtain the following concise trace.
 
 ```
-[Initializing contract_0 and children]
+[Initializing manager_contract and children]
 sender [uint8]: 3
 blocknum [uint256]: 0
 timestamp [uint256]: 0
@@ -306,44 +308,44 @@ To follow along, this last variation is available
 /* We select some initial neighbourhood. Maps are zero-initialized. */
 sol_uint256_t ZERO = Init_sol_uint256_t(0);
 if (nd_range(0, 2, "Use external address(3)")) {
-  Write_Map_1(&contract_1->user_bids, Init_sol_address_t(3), ZERO);
+  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(3), ZERO);
 }
 if (nd_range(0, 2, "Use external address(4)")) {
-  Write_Map_1(&contract_1->user_bids, Init_sol_address_t(4), ZERO);
+  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(4), ZERO);
 }
 if (nd_range(0, 2, "Use external address(5)")) {
-  Write_Map_1(&contract_1->user_bids, Init_sol_address_t(5), ZERO);
+  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(5), ZERO);
 }
-sol_assert(invariant(&contract_0), "Initialization is violated.");
+sol_assert(invariant(&manager_contract), "Initialization is violated.");
 // [ END ] INSTRUMENTATION
 
 while (sol_continue()) {
   // [START] INSTRUMENTATION (LINE 270)
   /* Select and cache an arbitrary neighbourhood to check non-interference. */
-  Write_Map_1(&contract_1->user_bids, Init_sol_address_t(3),
+  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(3),
               Init_sol_uint256_t(nd_uint256_t("external bids[3]")));
-  Write_Map_1(&contract_1->user_bids, Init_sol_address_t(4),
+  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(4),
               Init_sol_uint256_t(nd_uint256_t("external bids[4]")));
-  Write_Map_1(&contract_1->user_bids, Init_sol_address_t(5),
+  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(5),
               Init_sol_uint256_t(nd_uint256_t("external bids[5]")));
   sol_uint256_t extern_3
-    = Read_Map_1(&contract_1->user_bids, Init_sol_address_t(3));
+    = Read_Map_1(&auction_contract->user_bids, Init_sol_address_t(3));
   sol_uint256_t extern_4
-    = Read_Map_1(&contract_1->user_bids, Init_sol_address_t(4));
+    = Read_Map_1(&auction_contract->user_bids, Init_sol_address_t(4));
   sol_uint256_t extern_5
-    = Read_Map_1(&contract_1->user_bids, Init_sol_address_t(5));
-  sol_require(invariant(&contract_0), "Bad arrangement.");
+    = Read_Map_1(&auction_contract->user_bids, Init_sol_address_t(5));
+  sol_require(invariant(&manager_contract), "Bad arrangement.");
   // [ END ] INSTRUMENTATION
 
   // [START] INSTRUMENTATION (LINE 284)
   /* Select a new neighbourhood to take a step. */
-  Write_Map_1(&contract_1->user_bids, Init_sol_address_t(3),
+  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(3),
               Init_sol_uint256_t(nd_uint256_t("bids[3]")));
-  Write_Map_1(&contract_1->user_bids, Init_sol_address_t(4),
+  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(4),
               Init_sol_uint256_t(nd_uint256_t("bids[4]")));
-  Write_Map_1(&contract_1->user_bids, Init_sol_address_t(5),
+  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(5),
               Init_sol_uint256_t(nd_uint256_t("bids[5]")));
-  sol_require(invariant(&contract_0), "Bad arrangement.");
+  sol_require(invariant(&manager_contract), "Bad arrangement.");
   // [ END ]
 
   /* ... Call setup ... */
@@ -351,21 +353,21 @@ while (sol_continue()) {
   switch (next_call) { /* ... Run transactions ... */ }
 
   // [START] INSTRUMENTATION (LINE 347)
-  sol_assert(invariant(&contract_0), "Local Inductiveness is violated.");
+  sol_assert(invariant(&manager_contract), "Local Inductiveness is violated.");
   // [ END ] INSTRUMENTATION
 
   // [START] INSTRUMENTATION (LINE 349)
   /* Checks non-interference, taking into account overlapping neighbourhoods. */
   if (nd_range(0, 2, "Use external address(3)")) {
-    Write_Map_1(&contract_1->user_invested, Init_sol_address_t(3), extern_3);
+    Write_Map_1(&auction_contract->user_invested, Init_sol_address_t(3), extern_3);
   }
   if (nd_range(0, 2, "Use external address(4)")) {
-    Write_Map_1(&contract_1->user_invested, Init_sol_address_t(4), extern_4);
+    Write_Map_1(&auction_contract->user_invested, Init_sol_address_t(4), extern_4);
   }
   if (nd_range(0, 2, "Use external address(5)")) {
-    Write_Map_1(&contract_1->user_invested, Init_sol_address_t(5), extern_5);
+    Write_Map_1(&auction_contract->user_invested, Init_sol_address_t(5), extern_5);
   }
-  sol_assert(invariant(&contract_0), "Non-interference is violated.");
+  sol_assert(invariant(&manager_contract), "Non-interference is violated.");
   // [ END ] INSTRUMENTATION
 }
 ```
