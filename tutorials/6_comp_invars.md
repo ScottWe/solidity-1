@@ -187,12 +187,12 @@ line 213 of the
 
 ### Attempt One: The `True` Compositional Invariant
 
-We want to show that `forall clients x: property(Manager, x)` is an inductive
-invariant of the contract. If we were to tackle this directly, we would prove
-that the property held after constructing the bundle, and then continued to
-hold after each transaction. However, in the local setting, we need only prove
-that the compositional invariant implies the property. This is because the
-compositional invariant summarizes all possible clients.
+We want to show that `forall x : clients :: property(Manager, x)` is an
+inductive invariant of the contract. If we were to tackle this directly, we
+would prove that the property held after constructing the bundle, and then
+continued to hold after each transaction. However, in the local setting, we need
+only prove that the compositional invariant implies the property. This is
+because the compositional invariant summarizes all possible clients.
 
 This gives us the following
 [model variation](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-6/instrumented/cmodel_1.c):
