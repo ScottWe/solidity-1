@@ -212,9 +212,9 @@ while (sol_continue()) {
               Init_sol_uint256_t(nd_uint256_t("bids[5]")));
   sol_require(invariant(&contract_0), "Bad arrangement.");
   /* Next, we check the property against this arbitrary neighbourhood. */
-  sol_assert(property(&contract_0, Init_sol_address_t(0)), "Violation of Prop(0).");
+  sol_assert(property(&contract_0, Init_sol_address_t(0)), "Address 0 violates Prop.");
   /* ... */
-  sol_assert(property(&contract_0, Init_sol_address_t(5)), "Violation of Prop(5).");
+  sol_assert(property(&contract_0, Init_sol_address_t(5)), "Address 5 violates Prop.");
   // [ END ] INSTRUMENTATION
 
   /* ... Call setup ... */
@@ -244,15 +244,15 @@ timestamp [uint256]: 0
 bids[3] [uint256]: 1
 bids[4] [uint256]: 0
 bids[5] [uint256]: 0
-assert: Violation of Prop(3).
+assert: Address 3 violates Prop.
 [sea] __VERIFIER_error was executed
 ```
 
-If we go to the assertion associated with `assert: Violation of Prop(3)` we find
-that `bids[3] <= maxBid` has failed. If we walk back through the trace, we find
-the root cause of this problem, namely `bids[3] [uint256]: 1`. This says that
-`bids[3]` was assigned to a value larger than the maximum bid. Clearly, this
-assignment is not feasible.
+If we go to the assertion associated with `assert: Address 3 violates Prop` we
+find that `bids[3] <= maxBid` has failed. If we walk back through the trace, we
+find the root cause of this problem, namely `bids[3] [uint256]: 1`. This says
+that `bids[3]` was assigned to a value larger than the maximum bid. Clearly,
+this assignment is not feasible.
 
 ### Attempt Two: A Refined Compositional Invariant
 
