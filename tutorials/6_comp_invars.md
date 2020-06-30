@@ -158,10 +158,18 @@ Let's start by generating the model:
   * `CC=clang-10 CXX=clang++-10 cmake ..`
   * `cmake --build . --target run-clang-format`
 
-To improve readability, we have replaced `contract_0` with `manager_contract`
-and `contract_1` with `auction_contract`. For simplicity, we will also encode
-the property as a simple `C` method. The method takes in a `Manager` bundle, and
-checks the property for a given address:
+If we look to line 23 of `cmodel.c`, we see that `Auction.bids` retains 6
+entries. This is because each neighbourhood of the bundle has at most 6 unique
+clients. The first three clients designate `address(0)`, `address(Manager)`, and
+`address(Auction)`, respectively. The final three clients are arbitrary, and can
+represent any other client. A complete analysis for how we obtained this
+neighbourhood can be found in a [previously tutorial](4_arbitrary_clients).
+
+To improve the readability of our examples, we have replaced `contract_0` with
+`manager_contract` and `contract_1` with `auction_contract`. For simplicity, we
+will also encode the property as a simple `C` function. The function takes as
+input a `Manager` bundle, and returns true if the configuration satisfies the
+property:
 
 ```cpp
 int property(struct Manager *c0, sol_address_t addr)
@@ -172,7 +180,7 @@ int property(struct Manager *c0, sol_address_t addr)
 }
 ```
 
-Let's also add a placeholder method for the compositional invariant. As `True`
+Let's also add a placeholder function for the compositional invariant. As `True`
 is always compositional, we will use that:
 
 ```cpp
@@ -196,8 +204,23 @@ continued to hold after each transaction. However, in the local setting, we need
 only prove that the compositional invariant implies the property. This is
 because the compositional invariant summarizes all possible clients.
 
-This gives us the following
-[model variation](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-6/instrumented/cmodel_1.c):
+Now recall that for each neighbourhood of this contract, there are at most six
+distinct clients. The first three of these clients are distinguished, and
+therefore persist across all neighbourhoods. The final three addresses are
+representative, and may vary from neighbourhood to neighbourhood. As before, we
+encode the representative clients using non-determinism. To simplify our
+presentation we, introduce the following macro:
+
+```cpp
+#DEFINE ND_MAP_WRITE(map, i, msg) \
+  Write_Map_1(map, Init_sol_address_t(i), Init_sol_uint256(nd_uint256(msg)));
+```
+
+Once we have selected a neighbourhood, we directly assert that it satisfies the
+property. We do this by substituting each of the six addresses for `x`. This
+gives us the
+[section variation](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-6/instrumented/cmodel_1.c),
+as outlined below:
 
 ```cpp
 /* ... Contract initialization ... */
@@ -206,12 +229,9 @@ while (sol_continue()) {
   // [START] INSTRUMENTATION (LINE 250)
   /* Reached upon initialization, and after each iteration. */
   /* First we construct an arbitrary network. */
-  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(3),
-              Init_sol_uint256_t(nd_uint256_t("bids[3]")));
-  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(4),
-              Init_sol_uint256_t(nd_uint256_t("bids[4]")));
-  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(5),
-              Init_sol_uint256_t(nd_uint256_t("bids[5]")));
+  ND_MAP_WRITE(&auction_contract->user_bids, 3, "bids[3]");
+  ND_MAP_WRITE(&auction_contract->user_bids, 4, "bids[4]");
+  ND_MAP_WRITE(&auction_contract->user_bids, 5, "bids[5]");
   sol_require(invariant(&manager_contract), "Bad arrangement.");
   /* Next, we check the property against this arbitrary neighbourhood. */
   sol_assert(property(&manager_contract, Init_sol_address_t(0)), "Address 0 violates Prop.");
@@ -322,12 +342,9 @@ sol_assert(invariant(&manager_contract), "Initialization is violated.");
 while (sol_continue()) {
   // [START] INSTRUMENTATION (LINE 270)
   /* Select and cache an arbitrary neighbourhood to check non-interference. */
-  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(3),
-              Init_sol_uint256_t(nd_uint256_t("external bids[3]")));
-  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(4),
-              Init_sol_uint256_t(nd_uint256_t("external bids[4]")));
-  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(5),
-              Init_sol_uint256_t(nd_uint256_t("external bids[5]")));
+  ND_MAP_WRITE(&auction_contract->user_bids, 3, "external bids[3]");
+  ND_MAP_WRITE(&auction_contract->user_bids, 4, "external bids[4]");
+  ND_MAP_WRITE(&auction_contract->user_bids, 5, "external bids[5]");
   sol_uint256_t extern_3
     = Read_Map_1(&auction_contract->user_bids, Init_sol_address_t(3));
   sol_uint256_t extern_4
@@ -339,12 +356,9 @@ while (sol_continue()) {
 
   // [START] INSTRUMENTATION (LINE 284)
   /* Select a new neighbourhood to take a step. */
-  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(3),
-              Init_sol_uint256_t(nd_uint256_t("bids[3]")));
-  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(4),
-              Init_sol_uint256_t(nd_uint256_t("bids[4]")));
-  Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(5),
-              Init_sol_uint256_t(nd_uint256_t("bids[5]")));
+  ND_MAP_WRITE(&auction_contract->user_bids, 3, "bids[3]");
+  ND_MAP_WRITE(&auction_contract->user_bids, 4, "bids[4]");
+  ND_MAP_WRITE(&auction_contract->user_bids, 5, "bids[5]");
   sol_require(invariant(&manager_contract), "Bad arrangement.");
   // [ END ]
 
