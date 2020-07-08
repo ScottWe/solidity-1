@@ -219,7 +219,7 @@ presentation we, introduce the following macro:
 Once we have selected a neighbourhood, we directly assert that it satisfies the
 property. We do this by substituting each of the six addresses for `x`. This
 gives us the
-[section variation](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-6/instrumented/cmodel_1.c),
+[second variation](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-6/instrumented/cmodel_1.c),
 as outlined below:
 
 ```cpp
@@ -249,7 +249,7 @@ while (sol_continue()) {
 #### The Adequacy Test
 
 We can check this model by running `cmake --build . --target verify`. This shows
-that the property dose not hold. To get some more insight, let's enable logging
+that the property does not hold. To get some more insight, let's enable logging
 and generate a witness:
 
   * `cmake .. -DSEA_EXELOG=true`
@@ -416,5 +416,5 @@ In this tutorial we saw how to test the compositionality of a given candidate
 compositional invariant. We used this insight to prove the correctness of a
 global client property. We also motivated a procedure to find compositional
 invariants. This concludes our three part series on the foundations of local
-reasoning. in the next tutorial, we will explore more challenging applications
+reasoning. In the next tutorial, we will explore more challenging applications
 of local reasoning in smart contracts.
