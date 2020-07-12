@@ -163,7 +163,7 @@ entries. This is because each neighbourhood of the bundle has at most 6 unique
 clients. The first three clients designate `address(0)`, `address(Manager)`, and
 `address(Auction)`, respectively. The final three clients are arbitrary, and can
 represent any other client. A complete analysis for how we obtained this
-neighbourhood can be found in a [previously tutorial](4_arbitrary_clients).
+neighbourhood can be found in a [previous tutorial](4_arbitrary_clients).
 
 To improve the readability of our examples, we have replaced `contract_0` with
 `manager_contract` and `contract_1` with `auction_contract`. For simplicity, we
@@ -308,15 +308,32 @@ indeed adequate.
 However, we still have yet to prove the compositionality of our new candidate.
 We can automate this check by instrumenting one final model. We do this by
 encoding `Initialization`, `Local Inductiveness` and `Non-interference` as
-program assertions. While most of the code is fairly straight forward, we do
-make use of two modeling tricks.
+program assertions.
 
-  1. When checking `Initialization` and `Non-interference` we use three
-     non-deterministic flag variables to model overlap between the two
-     neighbourhoods.
-  2. To simulate an external process, we compute two neighbourhoods for the same
+The check for `Local Inductiveness` follows directly from the definition. The
+check of `Initialization` is somewhat more nuanced. The challenge here is that
+after initialization, our view is of the neighbourhood which was acted on by the
+constructor. In reality, all other representatives are zero initialized, and may
+therefore be in a different state than those in the neighbourhood. We must check
+that all such neighbourhoods satisfy the invariant.
+
+Finally, `Non-interference` check generalizes the challenge faced by the
+`Initialization` check. Here we must consider two neighbourhoods. One
+neighbourhood is fixed from before the transition, while the other takes part
+directly in the transition. However, simply fixing an external neighbourhood is
+not enough. If we fix the neighbourhood, we miss all neighbourhoods for which
+the acting process and the external process share one or more client. In effect,
+we must "decide" which clients the two neighbourhoods share, and then update the
+state as required.
+
+We address the forementioned challenge with two modeling tricks.
+
+  1. To simulate an external process, we compute two neighbourhoods for the same
      program state, and cache the first result. This simulates untouched mapping
      entries.
+  2. When checking `Initialization` and `Non-interference` we use three
+     non-deterministic flag variables to model overlap between the two
+     neighbourhoods.
 
 To follow along, this last variation is available
 [here](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-6/instrumented/cmodel_3.c)
@@ -356,9 +373,21 @@ while (sol_continue()) {
 
   // [START] INSTRUMENTATION (LINE 284)
   /* Select a new neighbourhood to take a step. */
-  ND_MAP_WRITE(&auction_contract->user_bids, 3, "bids[3]");
-  ND_MAP_WRITE(&auction_contract->user_bids, 4, "bids[4]");
-  ND_MAP_WRITE(&auction_contract->user_bids, 5, "bids[5]");
+  sol_bool_t use_ext_3 = Init_sol_bool_t(nd_range(0, 2, "Use external address(3)"));
+  if (!use_ext_3.v)
+  {
+    ND_MAP_WRITE(&auction_contract->user_bids, 3, "bids[3]");
+  }
+  sol_bool_t use_ext_4 = Init_sol_bool_t(nd_range(0, 2, "Use external address(4)"));
+  if (!use_ext_4.v)
+  {
+    ND_MAP_WRITE(&auction_contract->user_bids, 4, "bids[4]");
+  }
+  sol_bool_t use_ext_5 = Init_sol_bool_t(nd_range(0, 2, "Use external address(5)"));
+  if (!use_ext_5.v)
+  {
+    ND_MAP_WRITE(&auction_contract->user_bids, 5, "bids[5]");
+  }
   sol_require(invariant(&manager_contract), "Bad arrangement.");
   // [ END ]
 
@@ -372,13 +401,13 @@ while (sol_continue()) {
 
   // [START] INSTRUMENTATION (LINE 349)
   /* Checks non-interference, taking into account overlapping neighbourhoods. */
-  if (nd_range(0, 2, "Use external address(3)")) {
+  if (use_ext_3.v) {
     Write_Map_1(&auction_contract->user_invested, Init_sol_address_t(3), extern_3);
   }
-  if (nd_range(0, 2, "Use external address(4)")) {
+  if (use_ext_4.v) {
     Write_Map_1(&auction_contract->user_invested, Init_sol_address_t(4), extern_4);
   }
-  if (nd_range(0, 2, "Use external address(5)")) {
+  if (use_ext_5.v) {
     Write_Map_1(&auction_contract->user_invested, Init_sol_address_t(5), extern_5);
   }
   sol_assert(invariant(&manager_contract), "Non-interference is violated.");
