@@ -317,23 +317,26 @@ constructor. In reality, all other representatives are zero initialized, and may
 therefore be in a different state than those in the neighbourhood. We must check
 that all such neighbourhoods satisfy the invariant.
 
-Finally, `Non-interference` check generalizes the challenge faced by the
-`Initialization` check. Here we must consider two neighbourhoods. One
-neighbourhood is fixed from before the transition, while the other takes part
-directly in the transition. However, simply fixing an external neighbourhood is
-not enough. If we fix the neighbourhood, we miss all neighbourhoods for which
-the acting process and the external process share one or more client. In effect,
-we must "decide" which clients the two neighbourhoods share, and then update the
-state as required.
+The `Non-interference` check generalizes the challenge faced by the
+`Initialization` check. Here we must consider pairs of neighbourhoods. One
+neighbourhood is fixed before the transition takes place, while the other takes
+part directly in the transition. As these neighbourhoods are arbitrary, it is
+possible that a representative in the first neighbourhood overlaps with some
+representative in the second neighbourhood. In such a case, the post-state of
+this representative must be reflected in both neighbourhoods.
 
-We address the forementioned challenge with two modeling tricks.
+A naive solution to either problem is to encode each case explicitly. However,
+the number of cases grows exponentially with the number of representatives. A
+more sophisticated solution is to select one of the exponentially many cases
+through non-determinism. This insight motivates the following two tricks, and in
+turn, reduces the problem to a linear number of binary decisions.
 
   1. To simulate an external process, we compute two neighbourhoods for the same
-     program state, and cache the first result. This simulates untouched mapping
-     entries.
+     program state, and cache the first result. This simulates an untouched
+     neighbourhood.
   2. When checking `Initialization` and `Non-interference` we use three
      non-deterministic flag variables to model overlap between the two
-     neighbourhoods.
+     neighbourhoods. If the i-th variable is true, the i-th client is shared.
 
 To follow along, this last variation is available
 [here](https://github.com/ScottWe/smartace-examples/blob/master/tutorials/post-6/instrumented/cmodel_3.c)
@@ -402,13 +405,13 @@ while (sol_continue()) {
   // [START] INSTRUMENTATION (LINE 349)
   /* Checks non-interference, taking into account overlapping neighbourhoods. */
   if (use_ext_3.v) {
-    Write_Map_1(&auction_contract->user_invested, Init_sol_address_t(3), extern_3);
+    Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(3), extern_3);
   }
   if (use_ext_4.v) {
-    Write_Map_1(&auction_contract->user_invested, Init_sol_address_t(4), extern_4);
+    Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(4), extern_4);
   }
   if (use_ext_5.v) {
-    Write_Map_1(&auction_contract->user_invested, Init_sol_address_t(5), extern_5);
+    Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(5), extern_5);
   }
   sol_assert(invariant(&manager_contract), "Non-interference is violated.");
   // [ END ] INSTRUMENTATION
