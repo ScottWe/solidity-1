@@ -212,7 +212,7 @@ encode the representative clients using non-determinism. To simplify our
 presentation we, introduce the following macro:
 
 ```cpp
-#DEFINE ND_MAP_WRITE(map, i, msg) \
+#DEFINE HAVOC_MAP_1_ENTRY(map, i, msg) \
   Write_Map_1(map, Init_sol_address_t(i), Init_sol_uint256(nd_uint256(msg)));
 ```
 
@@ -229,9 +229,9 @@ while (sol_continue()) {
   // [START] INSTRUMENTATION (LINE 250)
   /* Reached upon initialization, and after each iteration. */
   /* First we construct an arbitrary network. */
-  ND_MAP_WRITE(&auction_contract->user_bids, 3, "bids[3]");
-  ND_MAP_WRITE(&auction_contract->user_bids, 4, "bids[4]");
-  ND_MAP_WRITE(&auction_contract->user_bids, 5, "bids[5]");
+  HAVOC_MAP_1_ENTRY(&auction_contract->user_bids, 3, "bids[3]");
+  HAVOC_MAP_1_ENTRY(&auction_contract->user_bids, 4, "bids[4]");
+  HAVOC_MAP_1_ENTRY(&auction_contract->user_bids, 5, "bids[5]");
   sol_require(invariant(&manager_contract), "Bad arrangement.");
   /* Next, we check the property against this arbitrary neighbourhood. */
   sol_assert(property(&manager_contract, Init_sol_address_t(0)), "Address 0 violates Prop.");
@@ -362,9 +362,9 @@ sol_assert(invariant(&manager_contract), "Initialization is violated.");
 while (sol_continue()) {
   // [START] INSTRUMENTATION (LINE 270)
   /* Select and cache an arbitrary neighbourhood to check non-interference. */
-  ND_MAP_WRITE(&auction_contract->user_bids, 3, "external bids[3]");
-  ND_MAP_WRITE(&auction_contract->user_bids, 4, "external bids[4]");
-  ND_MAP_WRITE(&auction_contract->user_bids, 5, "external bids[5]");
+  HAVOC_MAP_1_ENTRY(&auction_contract->user_bids, 3, "external bids[3]");
+  HAVOC_MAP_1_ENTRY(&auction_contract->user_bids, 4, "external bids[4]");
+  HAVOC_MAP_1_ENTRY(&auction_contract->user_bids, 5, "external bids[5]");
   sol_uint256_t extern_3
     = Read_Map_1(&auction_contract->user_bids, Init_sol_address_t(3));
   sol_uint256_t extern_4
@@ -376,20 +376,20 @@ while (sol_continue()) {
 
   // [START] INSTRUMENTATION (LINE 284)
   /* Select a new neighbourhood to take a step. */
-  sol_bool_t use_ext_3 = Init_sol_bool_t(nd_range(0, 2, "Use external address(3)"));
-  if (!use_ext_3.v)
+  sol_bool_t share_addr_3 = Init_sol_bool_t(nd_range(0, 2, "Share address(3)"));
+  if (!share_addr_3.v)
   {
-    ND_MAP_WRITE(&auction_contract->user_bids, 3, "bids[3]");
+    HAVOC_MAP_1_ENTRY(&auction_contract->user_bids, 3, "bids[3]");
   }
-  sol_bool_t use_ext_4 = Init_sol_bool_t(nd_range(0, 2, "Use external address(4)"));
-  if (!use_ext_4.v)
+  sol_bool_t share_addr_4 = Init_sol_bool_t(nd_range(0, 2, "Share address(4)"));
+  if (!share_addr_4.v)
   {
-    ND_MAP_WRITE(&auction_contract->user_bids, 4, "bids[4]");
+    HAVOC_MAP_1_ENTRY(&auction_contract->user_bids, 4, "bids[4]");
   }
-  sol_bool_t use_ext_5 = Init_sol_bool_t(nd_range(0, 2, "Use external address(5)"));
-  if (!use_ext_5.v)
+  sol_bool_t share_addr_5 = Init_sol_bool_t(nd_range(0, 2, "Share address(5)"));
+  if (!share_addr_5.v)
   {
-    ND_MAP_WRITE(&auction_contract->user_bids, 5, "bids[5]");
+    HAVOC_MAP_1_ENTRY(&auction_contract->user_bids, 5, "bids[5]");
   }
   sol_require(invariant(&manager_contract), "Bad arrangement.");
   // [ END ]
@@ -404,13 +404,13 @@ while (sol_continue()) {
 
   // [START] INSTRUMENTATION (LINE 349)
   /* Checks non-interference, taking into account overlapping neighbourhoods. */
-  if (use_ext_3.v) {
+  if (!share_addr_3.v) {
     Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(3), extern_3);
   }
-  if (use_ext_4.v) {
+  if (!share_addr_4.v) {
     Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(4), extern_4);
   }
-  if (use_ext_5.v) {
+  if (!share_addr_5.v) {
     Write_Map_1(&auction_contract->user_bids, Init_sol_address_t(5), extern_5);
   }
   sol_assert(invariant(&manager_contract), "Non-interference is violated.");
