@@ -1,12 +1,12 @@
 ---
 layout: post
-title: "2. Finding Representation Invariants for Smart Contracts"
+title: "Finding Representation Invariants for Smart Contracts"
 subtitle: "Basic Auditing with SmartACE"
 date: 2020-05-18 15:00:00
 categories: [smartace, verification, model checking, fuzzing, invariants]
 ---
 
-# 2. Finding Representation Invariants for Smart Contracts
+# Finding Representation Invariants for Smart Contracts
 
 By Scott Wesley in collaboration Maria Christakis, Arie Gurfinkel, Xinwen Hu,
 Jorge Navas, Richard Trefler, and Valentin Wüstholz.

@@ -1,11 +1,11 @@
 ---
 layout: post
-title: "1. Installing SmartACE"
+title: "Installing SmartACE"
 date: 2020-05-18 15:00:00
 categories: [smartace, install]
 ---
 
-# 1. Installing SmartACE
+# Installing SmartACE
 
 By Scott Wesley in collaboration Maria Christakis, Arie Gurfinkel, Xinwen Hu,
 Jorge Navas, Richard Trefler, and Valentin Wüstholz.

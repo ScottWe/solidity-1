@@ -1,12 +1,12 @@
 ---
 layout: post
-title: "4. Verifying Client Properties in SmartACE"
+title: "Verifying Client Properties in SmartACE"
 subtitle: "An Introduction to Local Reasoning"
 date: 2020-05-25 12:00:00
 categories: [smartace, verification, model checking, local reasoning]
 ---
 
-# 4. Verifying Client Properties in SmartACE
+# Verifying Client Properties in SmartACE
 
 By Scott Wesley in collaboration Maria Christakis, Arie Gurfinkel, Xinwen Hu,
 Jorge Navas, Richard Trefler, and Valentin Wüstholz.
